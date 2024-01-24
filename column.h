@@ -1,8 +1,17 @@
+#ifndef INCLUDE_COLUMN_H_
+#define INCLUDE_COLUMN_H_
+
+#include <cstring>
 #include <cstdint>
 
 enum ColumnType {
   kTypeUnknown = 0,
-  kTypeInteger,
+  kTypeTinyInt,
+  kTypeSmallInt,
+  kTypeMediumInt,
+  kTypeInt,
+  kTypeBigInt,
+  kTypeFloat,
   kTypeDouble,
   kTypeVarchar
 };
@@ -45,7 +54,7 @@ class ColumnInteger : public Column {
   explicit ColumnInteger(int64_t value, char* buf)
     : Column(buf, sizeof(value), sizeof(value)) {
       *(reinterpret_cast<int64_t* >(buf_)) = value;
-      type_ = kTypeInteger;
+      type_ = kTypeBigInt;
     }
 
   ~ColumnInteger() override {
@@ -87,3 +96,5 @@ class ColumnVarchar : public Column {
     return buf_ + sizeof(raw_length_);
   }
 };
+
+#endif  // INCLUDE_COLUMN_H_

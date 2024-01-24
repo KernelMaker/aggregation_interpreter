@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "interpreter.h"
 
 const char* g_chars = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
@@ -12,10 +14,10 @@ int main() {
   program[1] = ((uint16_t)1) << 16 | ((uint16_t)2);
 
   program[2] = 0; // group by cols
-  program[3] = kTypeInteger; // first aggregation type INTEGER
+  program[3] = kTypeBigInt; // first aggregation type INTEGER
   program[4] = kTypeDouble; // first aggregation type DOUBLE
 
-  program[5] = ((uint8_t)kOpCount) << 24 | (uint8_t)(kTypeInteger << 4) << 16 | (uint16_t)0; // COUNT +1 -> Agg0
+  program[5] = ((uint8_t)kOpCount) << 24 | (uint8_t)(kTypeBigInt << 4) << 16 | (uint16_t)0; // COUNT +1 -> Agg0
 
   program[6] = ((uint8_t)kOpLoad) << 24 | (uint8_t)(kTypeDouble << 4) << 16 | ((uint8_t)kReg1 & 0x0F) << 16 | (uint16_t)1; // Load Col1 -> Reg1
   program[7] = ((uint8_t)kOpSum) << 24 | (uint8_t)(kTypeDouble << 4) << 16 | ((uint8_t)kReg1 & 0x0F) << 16 | (uint16_t)1; // Sum Reg1 -> Agg1
