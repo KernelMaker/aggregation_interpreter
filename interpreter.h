@@ -19,9 +19,8 @@ enum InterpreterOp {
   kOpMul,
   kOpDiv,
   kOpMod,
-
-  kOpLoad,
-
+  kOpLoadCol,
+  kOpStore,
   kOpSum,
   kOpMax,
   kOpMin,
@@ -56,12 +55,32 @@ struct EntryCmp {
   }
 };
 
+union DataValue {
+  int64_t val_int64;
+  uint64_t val_uint64;
+  double val_double;
+  void* val_ptr;
+};
+
+typedef int32_t DataType;
+struct Register {
+  DataType type;
+  DataValue value;
+  bool is_unsigned;
+};
+
+struct AggResItem {
+  DataType type;
+  DataValue value;
+  bool is_unsigned;
+};
+
 class AggInterpreter {
  public:
   AggInterpreter(const uint32_t* prog, uint32_t prog_len):
     prog_(prog), prog_len_(prog_len), cur_pos_(0),
     inited_(false), n_gb_cols_(0), gb_cols_(nullptr),
-    n_agg_results_(0), agg_res_types_(nullptr),
+    n_agg_results_(0),
     agg_results_(nullptr), agg_prog_start_pos_(0),
     gb_map_(nullptr), n_groups_(0) {
   }
@@ -87,13 +106,12 @@ class AggInterpreter {
   uint32_t prog_len_;
   uint32_t cur_pos_;
   bool inited_;
-  int64_t registers_[kRegTotal];
+  Register registers_[kRegTotal];
 
   uint32_t n_gb_cols_;
   uint32_t* gb_cols_;
   uint32_t n_agg_results_;
-  uint32_t* agg_res_types_;
-  int64_t* agg_results_;
+  AggResItem* agg_results_;
   uint32_t agg_prog_start_pos_;
 
   std::map<Entry, Entry, EntryCmp>* gb_map_;

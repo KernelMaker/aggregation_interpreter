@@ -17,10 +17,19 @@ int main() {
   program[3] = kTypeBigInt; // first aggregation type INTEGER
   program[4] = kTypeDouble; // first aggregation type DOUBLE
 
-  program[5] = ((uint8_t)kOpCount) << 24 | (uint8_t)(kTypeBigInt << 4) << 16 | (uint16_t)0; // COUNT +1 -> Agg0
+  program[5] = ((uint8_t)kOpCount) << 26 |                              // COUNT
+               ((uint8_t)0) << 25 | (uint8_t)(kTypeBigInt << 4) << 18 | // signed kTypeBigInt
+               (uint16_t)0;                                             // agg_result 0
 
-  program[6] = ((uint8_t)kOpLoad) << 24 | (uint8_t)(kTypeDouble << 4) << 16 | ((uint8_t)kReg1 & 0x0F) << 16 | (uint16_t)1; // Load Col1 -> Reg1
-  program[7] = ((uint8_t)kOpSum) << 24 | (uint8_t)(kTypeDouble << 4) << 16 | ((uint8_t)kReg1 & 0x0F) << 16 | (uint16_t)1; // Sum Reg1 -> Agg1
+  program[6] = ((uint8_t)kOpLoadCol) << 26 |                            // LOADCOL
+               (uint8_t)(0 << 25) | (uint8_t)(kTypeDouble << 4) << 18 | // signed kTypeDouble
+               ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
+               (uint16_t)1;                                             // Column 1
+
+  program[7] = ((uint8_t)kOpSum) << 26 |                                // SUM
+               (uint8_t)(0 << 25) | (uint8_t)(kTypeDouble << 4) << 18 | // signed kTypeDouble
+               ((uint8_t)kReg1 & 0x0F) << 16 |                          // register 1
+               (uint16_t)1;                                             // agg_result 1
 
 
   AggInterpreter agg(program, g_prog_len);

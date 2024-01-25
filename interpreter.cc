@@ -3,11 +3,42 @@
 
 #include "interpreter.h"
 
-union TypeUnion {
-  int64_t val_int64;
-  int64_t val_uint64;
-  double val_double;
-};
+int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
+  DataType type1 = a.type;
+  DataType type2 = b.type;
+
+  assert(type1 == type2 && type1 == kTypeBigInt);
+  res->value.val_int64 = a.value.val_int64 + b.value.val_int64;
+
+  return 0;
+}
+
+int32_t RegStoreToAggResItem(const Register& a, AggResItem* res) {
+  DataType type1 = a.type;
+  DataType type2 = res->type;
+
+  assert(type1 == type2 && type1 == kTypeBigInt);
+
+  // case kTypeBigInt
+  res->value.val_int64 = a.value.val_int64;
+  return 0;
+}
+
+int32_t RegIncrToAggResItem(const Register& a, AggResItem* res) {
+  assert(res != nullptr && a.type == res->type);
+
+  switch(res->type) {
+    case kTypeBigInt:
+      res->value.val_int64 = a.value.val_int64 + res->value.val_int64;
+      break;
+    case kTypeDouble:
+      res->value.val_double = a.value.val_double + res->value.val_double;
+      break;
+    default:
+      assert(0);
+  }
+  return 0;
+}
 
 struct OperItem {
   uint8_t op;
@@ -94,7 +125,7 @@ OperItem OperArray[kOpTotal] = {
   OperItem{kOpMul, kOpMul, &MulBigInt, &MulBigUint, &MulDouble},
   OperItem{kOpDiv, kOpDiv, &DivBigInt, &DivBigUint, &DivDouble},
   OperItem{kOpMod, kOpMod, &ModBigInt, &ModBigUint, &ModDouble},
-  OperItem{kOpLoad, kOpLoad, nullptr, nullptr, nullptr},
+  OperItem{kOpLoadCol, kOpLoadCol, nullptr, nullptr, nullptr},
   OperItem{kOpSum, kOpSum, &PlusBigInt, &PlusBigUint, &PlusDouble},
   OperItem{kOpMax, kOpMax, &MaxBigInt, &MaxBigUint, &MaxDouble},
   OperItem{kOpMin, kOpMin, &MinBigInt, &MinBigUint, &MinDouble},
@@ -141,11 +172,11 @@ bool AggInterpreter::Init() {
    */
   if (n_agg_results_) {
 
-    agg_results_ = new int64_t[n_agg_results_];
-    agg_res_types_ = new uint32_t[n_agg_results_];
+    agg_results_ = new AggResItem[n_agg_results_];
     uint32_t i = 0;
     while (i < n_agg_results_ && cur_pos_ < prog_len_) {
-      agg_res_types_[i++] = prog_[cur_pos_++];
+      agg_results_[i].type = prog_[cur_pos_++];
+      agg_results_[i++].value.val_int64 = 0;
     }
   }
 
@@ -156,9 +187,29 @@ bool AggInterpreter::Init() {
   return true;
 }
 
+DataType CeilType(DataType type) {
+  switch (type) {
+    case kTypeTinyInt:
+    case kTypeSmallInt:
+    case kTypeMediumInt:
+    case kTypeBigInt:
+      return kTypeBigInt;
+    case kTypeFloat:
+    case kTypeDouble:
+      return kTypeDouble;
+    default:
+      assert(0);
+  }
+}
+
+bool DecodeRawType(uint8_t type, DataType* res) {
+  *res = type & 0x0F;
+  return type & 0x10;
+}
+
 bool AggInterpreter::ProcessRec(Record* rec) {
 
-  int64_t* agg_res_ptr = nullptr;
+  AggResItem* agg_res_ptr = nullptr;
 
   if (n_gb_cols_) {
     uint32_t agg_rec_len = 0;
@@ -166,7 +217,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
       Column* col = rec->GetColumn(i);
       agg_rec_len += col->encoded_length();
     }
-    agg_rec_len += (n_agg_results_ * sizeof(int64_t));
+    agg_rec_len += (n_agg_results_ * sizeof(AggResItem));
     char* agg_rec = new char[agg_rec_len];
     memset(agg_rec, 0, agg_rec_len);
 
@@ -179,14 +230,18 @@ bool AggInterpreter::ProcessRec(Record* rec) {
     Entry entry{agg_rec, pos};
     auto iter = gb_map_->find(entry);
     if (iter != gb_map_->end()) {
-      agg_res_ptr = reinterpret_cast<int64_t*>(iter->second.ptr);
+      agg_res_ptr = reinterpret_cast<AggResItem*>(iter->second.ptr);
       delete[] agg_rec;
     } else {
       gb_map_->insert(std::make_pair<Entry, Entry>(std::move(entry),
           std::move(Entry{agg_rec + pos,
-            static_cast<uint32_t>(n_agg_results_ * sizeof(int64_t))})));
+            static_cast<uint32_t>(n_agg_results_ * sizeof(AggResItem))})));
       n_groups_ = gb_map_->size();
-      agg_res_ptr = reinterpret_cast<int64_t*>(agg_rec + pos);
+      agg_res_ptr = reinterpret_cast<AggResItem*>(agg_rec + pos);
+
+      for (uint32_t i = 0; i < n_agg_results_; i++) {
+        agg_res_ptr[i].type = agg_results_[i].type;
+      }
     }
   } else {
     agg_res_ptr = agg_results_;
@@ -194,89 +249,102 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
   Column* col;
   uint32_t value;
-  uint32_t type;
+  uint8_t raw_type;
+  DataType type;
+  bool is_unsigned;
+  uint32_t reg_index;
+
+  uint8_t raw_type2;
+  DataType type2;
+  bool is_unsigned2;
+  uint32_t reg_index2;
+
   uint32_t agg_index;
   uint32_t col_index;
-  uint32_t reg_index;
-  uint32_t reg_index_2;
+
   uint32_t exec_pos = agg_prog_start_pos_;
-  TypeUnion* agg_res_field_ptr = nullptr;
-  TypeUnion* reg_ptr = nullptr;
-  TypeUnion* reg_ptr_2 = nullptr;
   while (exec_pos < prog_len_) {
     value = prog_[exec_pos++];
-    uint8_t op = (value & 0xFF000000) >> 24;
+    uint8_t op = (value & 0xFC000000) >> 26;
+    int ret = 0;
     switch(op) {
       case kOpPlus:
+        // raw_type = (value & 0x03E00000) >> 21;
+        // raw_type2 = (value & 0x001F0000) >> 16;
+        // is_unsigned = DecodeRawType(raw_type, &type);
+        // is_unsigned2 = DecodeRawType(raw_type2, &type2);
+
+        reg_index = (value & 0x0000F000) >> 12;
+        reg_index2 = (value & 0x00000F00) >> 12;
+
+        assert(registers_[reg_index].type == kTypeBigInt ||
+              registers_[reg_index].type == kTypeDouble);
+        assert(registers_[reg_index2].type == kTypeBigInt ||
+              registers_[reg_index2].type == kTypeDouble);
+
+        ret = RegPlusReg(registers_[reg_index], registers_[reg_index2],
+                              &registers_[reg_index]);
+        assert(ret == 0);
+        break;
+
       case kOpMinus:
       case kOpMul:
       case kOpDiv:
       case kOpMod:
-        type = (value & 0x00F00000) >> 20;
-        reg_index = (value & 0x0000F000) >> 12;
-        reg_index_2 = (value & 0x00000F00) >> 8;
-        reg_ptr = reinterpret_cast<TypeUnion*>(&registers_[reg_index]);
-        reg_ptr_2 = reinterpret_cast<TypeUnion*>(&registers_[reg_index_2]);
-        switch(type) {
+        break;
+
+      case kOpLoadCol:
+        raw_type = (value & 0x03E00000) >> 22;
+        is_unsigned = DecodeRawType(raw_type, &type);
+        reg_index = (value & 0x000F0000) >> 16;
+        col_index = (value & 0x0000FFFF);
+
+        col = rec->GetColumn(col_index);
+        assert(type == CeilType(col->type()) && col->raw_length() == sizeof(Register::value));
+
+        registers_[reg_index].type = type;
+        registers_[reg_index].is_unsigned = is_unsigned;
+        switch (type) {
           case kTypeBigInt:
-            (OperArray[op].FuncBigInt)(registers_[reg_index],
-                registers_[reg_index_2],
-                &registers_[reg_index]);
+            registers_[reg_index].value.val_int64 = longlongget(col->data());
             break;
-
           case kTypeDouble:
-            (OperArray[op].FuncDouble)(
-                reg_ptr->val_double,
-                reg_ptr_2->val_double,
-                reinterpret_cast<double*>(&registers_[reg_index]));
-            break;
-
+            registers_[reg_index].value.val_double = doubleget(col->data());
           default:
             break;
         }
         break;
 
-      case kOpLoad:
+      case kOpStore:
         type = (value & 0x00F00000) >> 20;
         reg_index = (value & 0x000F0000) >> 16;
-        col_index = (value & 0x0000FFFF);
-        col = rec->GetColumn(col_index);
-        assert(type == col->type() && col->raw_length() == sizeof(int64_t));
-        memcpy((char*)&registers_[reg_index], col->data(), sizeof(int64_t));
+        agg_index = (value & 0x0000FFFF);
+        assert(type == registers_[reg_index].type);
+        ret = RegStoreToAggResItem(registers_[reg_index], &agg_res_ptr[agg_index]);
+        assert(ret == 0);
         break;
 
+
       case kOpCount:
-        type = (value & 0x00F00000) >> 20;
+        raw_type = (value & 0x03E00000) >> 22;
+        is_unsigned = DecodeRawType(raw_type, &type);
         agg_index = (value & 0x0000FFFF);
-        assert(type == agg_res_types_[agg_index]);
-        (OperArray[op].FuncBigInt)(agg_res_ptr[agg_index], 1,
-            &agg_res_ptr[agg_index]);
+        assert(type == agg_results_[agg_index].type);
+        // TODO Uint
+        ret = RegIncrToAggResItem(Register{kTypeBigInt, 1}, &agg_res_ptr[agg_index]);
+        assert(ret == 0);
         break;
 
        case kOpSum:
-        type = (value & 0x00F00000) >> 20;
+        raw_type = (value & 0x03E00000) >> 22;
+        is_unsigned = DecodeRawType(raw_type, &type);
         reg_index = (value & 0x000F0000) >> 16;
         agg_index = (value & 0x0000FFFF);
-        assert(type == agg_res_types_[agg_index]);
-        agg_res_field_ptr = reinterpret_cast<TypeUnion*>(&agg_res_ptr[agg_index]);
-        reg_ptr = reinterpret_cast<TypeUnion*>(&registers_[reg_index]);
-        switch(type) {
-          case kTypeBigInt:
-            (OperArray[op].FuncBigInt)(agg_res_ptr[agg_index],
-                registers_[reg_index],
-                &agg_res_ptr[agg_index]);
-            break;
+        assert(type == agg_results_[agg_index].type);
 
-          case kTypeDouble:
-            (OperArray[op].FuncDouble)(
-                agg_res_field_ptr->val_double,
-                reg_ptr->val_double,
-                reinterpret_cast<double*>(&agg_res_ptr[agg_index]));
-            break;
+        ret = RegIncrToAggResItem(registers_[reg_index], &agg_res_ptr[agg_index]);
 
-          default:
-            break;
-        }
+        assert(ret == 0);
         break;
 
       default:
@@ -288,6 +356,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 }
 
 void AggInterpreter::Print() {
+
   if (n_gb_cols_) {
     if (gb_map_) {
       printf("Group by columns: [");
@@ -297,28 +366,47 @@ void AggInterpreter::Print() {
       printf("]\n");
 
       for (auto iter = gb_map_->begin(); iter != gb_map_->end(); iter++) {
-        // printf("Group  %ld, Aggregation result: [",
-        //     static_cast<int64_t>(*iter->first.ptr));
         printf("Group [%p, %u], Aggregation result: [",
             (void*)iter->first.ptr, iter->first.len);
+        AggResItem* item = reinterpret_cast<AggResItem*>(iter->second.ptr);
         for (int i = 0; i < n_agg_results_; i++) {
-          switch(agg_res_types_[i]) {
+          switch(item[i].type) {
             case kTypeBigInt:
-              printf("%ld ", *reinterpret_cast<int64_t*>(
-                    &iter->second.ptr[i * sizeof(int64_t)]));
+              printf("(kTypeBigInt: %ld) ", item[i].value.val_int64);
               break;
+            // case kTypeBigUint:
+            //   printf("(kTypeBigUint: %lu) ", item[i].value.val_uint64);
+            //   break;
+
             case kTypeDouble:
-              printf("%lf ", *reinterpret_cast<double*>(
-                    &iter->second.ptr[i * sizeof(int64_t)]));
+              printf("(kTypeDouble: %lf) ", item[i].value.val_double);
               break;
             default:
-              break; 
+              assert(0);
           }
         }
         printf("]\n");
       }
     }
   } else {
+    printf("Aggregation result: [");
+    AggResItem* item = agg_results_;
+    for (int i = 0; i < n_agg_results_; i++) {
+      switch(item[i].type) {
+        case kTypeBigInt:
+          printf("(kTypeBigInt: %ld) ", item[i].value.val_int64);
+          break;
+        // case kTypeBigUint:
+        //   printf("(kTypeBigUint: %lu) ", item[i].value.val_uint64);
+        //   break;
+        case kTypeDouble:
+          printf("(kTypeDouble: %lf) ", item[i].value.val_double);
+          break;
+        default:
+          assert(0);
+      }
+    }
+    printf("]\n");
   }
 }
 

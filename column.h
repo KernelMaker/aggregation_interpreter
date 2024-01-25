@@ -18,17 +18,17 @@ enum ColumnType {
 
 class Column {
  public:
-  explicit Column(char* buf, uint32_t raw_length, uint32_t encoded_length)
+  explicit Column(unsigned char* buf, uint32_t raw_length, uint32_t encoded_length)
     : buf_(buf), raw_length_(raw_length), encoded_length_(encoded_length),
     type_(kTypeUnknown) {
     }
 
   virtual ~Column() {}
 
-  const char* buf() {
+  const unsigned char* buf() {
     return buf_;
   }
-  virtual const char* data() = 0;
+  virtual const unsigned char* data() = 0;
 
   uint32_t raw_length() {
     return raw_length_;
@@ -43,7 +43,7 @@ class Column {
   }
 
  protected:
-  char* buf_;
+  unsigned char* buf_;
   uint32_t raw_length_;
   uint32_t encoded_length_;
   ColumnType type_;
@@ -51,7 +51,7 @@ class Column {
 
 class ColumnInteger : public Column {
  public:
-  explicit ColumnInteger(int64_t value, char* buf)
+  explicit ColumnInteger(int64_t value, unsigned char* buf)
     : Column(buf, sizeof(value), sizeof(value)) {
       *(reinterpret_cast<int64_t* >(buf_)) = value;
       type_ = kTypeBigInt;
@@ -60,14 +60,14 @@ class ColumnInteger : public Column {
   ~ColumnInteger() override {
   }
 
-  const char* data() override {
+  const unsigned char* data() override {
     return buf_;
   }
 };
 
 class ColumnDouble : public Column {
  public:
-  explicit ColumnDouble(double value, char* buf)
+  explicit ColumnDouble(double value, unsigned char* buf)
     : Column(buf, sizeof(value), sizeof(value)) {
       *(reinterpret_cast<double* >(buf_)) = value;
       type_ = kTypeDouble;
@@ -76,23 +76,23 @@ class ColumnDouble : public Column {
   ~ColumnDouble() override {
   }
 
-  const char* data() override {
+  const unsigned char* data() override {
     return buf_;
   }
 };
 
 class ColumnVarchar : public Column {
  public:
-  explicit ColumnVarchar(const char* buffer, uint32_t buffer_len, char* buf)
+  explicit ColumnVarchar(const char* buffer, uint32_t buffer_len, unsigned char* buf)
     : Column(buf, buffer_len, sizeof(uint32_t) + buffer_len) {
       memcpy(buf_,
-          reinterpret_cast<char* >(&raw_length_), sizeof(raw_length_));
+          reinterpret_cast<unsigned char* >(&raw_length_), sizeof(raw_length_));
       memcpy(buf_ + sizeof(raw_length_), buffer, buffer_len);
       buf_[encoded_length_ - 1] = '\0';
       type_ = kTypeVarchar;
     }
 
-  const char* data() override {
+  const unsigned char* data() override {
     return buf_ + sizeof(raw_length_);
   }
 };

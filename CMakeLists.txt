@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+add_compile_options(-g -O0)
+
 # Test for endianess
 INCLUDE(TestBigEndian)
 TEST_BIG_ENDIAN(WORDS_BIGENDIAN)

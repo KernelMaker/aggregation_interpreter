@@ -19,14 +19,14 @@ class Record {
     for (int i = 0; i < n_cols; i++) {
       switch (cols_type_[i]) {
         case kTypeBigInt:
-          cols_[i] = new ColumnInteger(var_int, (char*)buf_ + pos);
+          cols_[i] = new ColumnInteger(var_int, (unsigned char*)buf_ + pos);
           break;
         case kTypeDouble:
-          cols_[i] = new ColumnDouble(var_double, (char*)buf_ + pos);
+          cols_[i] = new ColumnDouble(var_double, (unsigned char*)buf_ + pos);
           break;
         case kTypeVarchar:
           cols_[i] = new ColumnVarchar(var_varchar, varchar_length,
-                          (char*)buf_ + pos);
+                          (unsigned char*)buf_ + pos);
         default:
           break;
       }
@@ -45,7 +45,7 @@ class Record {
   void Print(); 
   
  private:
-  char buf_[encoded_length_];
+  unsigned char buf_[encoded_length_];
   Column* cols_[n_cols];
   ColumnType cols_type_[n_cols];
 };
