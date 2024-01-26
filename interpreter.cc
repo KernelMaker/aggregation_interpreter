@@ -1,14 +1,84 @@
 #include <assert.h>
 #include <stdio.h>
+#include <climits>
 
 #include "interpreter.h"
+
+// int64_t CheckIntegerOverflow(int64_t value, bool val_unsigned) {
+// 	// TODO input unsigned_flag
+// 	bool unsigned_flag = false;
+// 	if ((unsigned_flag && !val_unsigned && value < 0) ||
+// 			(!unsigned_flag && val_unsigned &&
+// 			 (ulonglong)value > (ulonglong)LLONG_MAX)) {
+// 		return -1;
+// 	}
+// 	return value;
+// }
+
+bool TestIfSumOverflowsUint64(uint64_t arg1, uint64_t arg2) {
+  return ULLONG_MAX - arg1 < arg2;
+}
 
 int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
   DataType type1 = a.type;
   DataType type2 = b.type;
-
   assert(type1 == type2 && type1 == kTypeBigInt);
-  res->value.val_int64 = a.value.val_int64 + b.value.val_int64;
+
+
+  int64_t val0 = a.value.val_int64;
+  int64_t val1 = b.value.val_int64;
+  int64_t res_val = static_cast<uint64_t>(val0) + static_cast<uint64_t>(val1);
+  bool res_unsigned = false;
+
+  if (a.is_unsigned) {
+    if (b.is_unsigned || val1 >= 0) {
+      if (TestIfSumOverflowsUint64((uint64_t)val0, (uint64_t)val1)) {
+        // overflows;
+        return -1;
+      } else {
+        res_unsigned = true;
+      }
+    } else {
+      if ((uint64_t)val0 > (uint64_t)(LLONG_MAX)) {
+        res_unsigned = true;
+      }
+    }
+  } else {
+    if (b.is_unsigned) {
+      if (val0 >= 0) {
+        if (TestIfSumOverflowsUint64((uint64_t)val0, (uint64_t)val1)) {
+          // overflows;
+          return -1;
+        } else {
+          res_unsigned = true;
+        }
+      } else {
+        if ((uint64_t)val1 > (uint64_t)(LLONG_MAX)) {
+          res_unsigned = true;
+        }
+      }
+    } else {
+      if (val0 >= 0 && val1 >= 0) {
+        res_unsigned = true;
+      } else if (val0 < 0 && val1 < 0 && res_val >= 0) {
+        // overflow
+        return -1;
+      }
+
+    }
+  }
+
+
+  // Check if res_val is overflow
+  // TODO input unsigned_flag
+  bool unsigned_flag = true;
+  if ((unsigned_flag && !res_unsigned && res_val < 0) ||
+      (!unsigned_flag && res_unsigned &&
+       (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
+    return -1;
+  } else {
+    res->value.val_int64 = res_val;
+  }
 
   return 0;
 }
@@ -269,13 +339,13 @@ bool AggInterpreter::ProcessRec(Record* rec) {
     int ret = 0;
     switch(op) {
       case kOpPlus:
-        // raw_type = (value & 0x03E00000) >> 21;
-        // raw_type2 = (value & 0x001F0000) >> 16;
-        // is_unsigned = DecodeRawType(raw_type, &type);
-        // is_unsigned2 = DecodeRawType(raw_type2, &type2);
+        raw_type = (value & 0x03E00000) >> 21;
+        raw_type2 = (value & 0x001F0000) >> 16;
+        is_unsigned = DecodeRawType(raw_type, &type);
+        is_unsigned2 = DecodeRawType(raw_type2, &type2);
 
         reg_index = (value & 0x0000F000) >> 12;
-        reg_index2 = (value & 0x00000F00) >> 12;
+        reg_index2 = (value & 0x00000F00) >> 8;
 
         assert(registers_[reg_index].type == kTypeBigInt ||
               registers_[reg_index].type == kTypeDouble);
@@ -294,7 +364,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         break;
 
       case kOpLoadCol:
-        raw_type = (value & 0x03E00000) >> 22;
+        raw_type = (value & 0x03E00000) >> 21;
         is_unsigned = DecodeRawType(raw_type, &type);
         reg_index = (value & 0x000F0000) >> 16;
         col_index = (value & 0x0000FFFF);
@@ -316,7 +386,8 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         break;
 
       case kOpStore:
-        type = (value & 0x00F00000) >> 20;
+        raw_type = (value & 0x03E00000) >> 21;
+        is_unsigned = DecodeRawType(raw_type, &type);
         reg_index = (value & 0x000F0000) >> 16;
         agg_index = (value & 0x0000FFFF);
         assert(type == registers_[reg_index].type);
@@ -326,7 +397,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
 
       case kOpCount:
-        raw_type = (value & 0x03E00000) >> 22;
+        raw_type = (value & 0x03E00000) >> 21;
         is_unsigned = DecodeRawType(raw_type, &type);
         agg_index = (value & 0x0000FFFF);
         assert(type == agg_results_[agg_index].type);
@@ -336,7 +407,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         break;
 
        case kOpSum:
-        raw_type = (value & 0x03E00000) >> 22;
+        raw_type = (value & 0x03E00000) >> 21;
         is_unsigned = DecodeRawType(raw_type, &type);
         reg_index = (value & 0x000F0000) >> 16;
         agg_index = (value & 0x0000FFFF);

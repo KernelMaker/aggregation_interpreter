@@ -7,10 +7,17 @@ void Record::Print() {
   for (int i = 0; i < n_cols; i++) {
     switch (cols_type_[i]) {
       case kTypeBigInt:
-        printf("  column [%u], raw_length: %u, encoded_length: %u, "
-               "type: INTEGER, value: %ld\n", i,
-               cols_[i]->raw_length(), cols_[i]->encoded_length(),
-               *reinterpret_cast<const int64_t* >(cols_[i]->data()));
+        if (cols_[i]->is_unsigned()) {
+          printf("  column [%u], raw_length: %u, encoded_length: %u, "
+                 "type: UNSIGNED BIGINT, value: %ld\n", i,
+                 cols_[i]->raw_length(), cols_[i]->encoded_length(),
+                 *reinterpret_cast<const uint64_t* >(cols_[i]->data()));
+        } else {
+          printf("  column [%u], raw_length: %u, encoded_length: %u, "
+                 "type: BIGINT, value: %ld\n", i,
+                 cols_[i]->raw_length(), cols_[i]->encoded_length(),
+                 *reinterpret_cast<const int64_t* >(cols_[i]->data()));
+        }
         break;
       case kTypeDouble:
         printf("  column [%u], raw_length: %u, encoded_length: %u, "
