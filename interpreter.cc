@@ -20,32 +20,23 @@ bool TestIfSumOverflowsUint64(uint64_t arg1, uint64_t arg2) {
 }
 
 int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
-  DataType type1 = a.type;
-  DataType type2 = b.type;
-  assert(type1 == type2 && type1 == kTypeBigInt);
 
-
-  int64_t val0 = a.value.val_int64;
-  int64_t val1 = b.value.val_int64;
-  int64_t res_val = static_cast<uint64_t>(val0) + static_cast<uint64_t>(val1);
-  bool res_unsigned = false;
-
-  if (a.is_unsigned) {
-    if (b.is_unsigned || val1 >= 0) {
-      if (TestIfSumOverflowsUint64((uint64_t)val0, (uint64_t)val1)) {
-        // overflows;
-        return -1;
-      } else {
-        res_unsigned = true;
-      }
-    } else {
-      if ((uint64_t)val0 > (uint64_t)(LLONG_MAX)) {
-        res_unsigned = true;
-      }
-    }
+  DataType res_type = kTypeUnknown;
+  if (a.type == kTypeDouble || b.type == kTypeDouble) {
+    res_type = kTypeDouble;
   } else {
-    if (b.is_unsigned) {
-      if (val0 >= 0) {
+    assert(a.type == kTypeBigInt && b.type == kTypeBigInt);
+    res_type = kTypeBigInt;
+  }
+
+  if (res_type == kTypeBigInt) {
+    int64_t val0 = a.value.val_int64;
+    int64_t val1 = b.value.val_int64;
+    int64_t res_val = static_cast<uint64_t>(val0) + static_cast<uint64_t>(val1);
+    bool res_unsigned = false;
+
+    if (a.is_unsigned) {
+      if (b.is_unsigned || val1 >= 0) {
         if (TestIfSumOverflowsUint64((uint64_t)val0, (uint64_t)val1)) {
           // overflows;
           return -1;
@@ -53,32 +44,70 @@ int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
           res_unsigned = true;
         }
       } else {
-        if ((uint64_t)val1 > (uint64_t)(LLONG_MAX)) {
+        if ((uint64_t)val0 > (uint64_t)(LLONG_MAX)) {
           res_unsigned = true;
         }
       }
     } else {
-      if (val0 >= 0 && val1 >= 0) {
-        res_unsigned = true;
-      } else if (val0 < 0 && val1 < 0 && res_val >= 0) {
-        // overflow
-        return -1;
+      if (b.is_unsigned) {
+        if (val0 >= 0) {
+          if (TestIfSumOverflowsUint64((uint64_t)val0, (uint64_t)val1)) {
+            // overflows;
+            return -1;
+          } else {
+            res_unsigned = true;
+          }
+        } else {
+          if ((uint64_t)val1 > (uint64_t)(LLONG_MAX)) {
+            res_unsigned = true;
+          }
+        }
+      } else {
+        if (val0 >= 0 && val1 >= 0) {
+          res_unsigned = true;
+        } else if (val0 < 0 && val1 < 0 && res_val >= 0) {
+          // overflow
+          return -1;
+        }
       }
-
     }
-  }
 
-
-  // Check if res_val is overflow
-  // TODO input unsigned_flag
-  bool unsigned_flag = true;
-  if ((unsigned_flag && !res_unsigned && res_val < 0) ||
-      (!unsigned_flag && res_unsigned &&
-       (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
-    return -1;
+    // Check if res_val is overflow
+    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    if ((unsigned_flag && !res_unsigned && res_val < 0) ||
+        (!unsigned_flag && res_unsigned &&
+         (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
+      return -1;
+    } else {
+      if (unsigned_flag) {
+        res->value.val_uint64 = res_val;
+      } else {
+        res->value.val_int64 = res_val;
+      }
+    }
+    res->is_unsigned = unsigned_flag;
   } else {
-    res->value.val_int64 = res_val;
+    double val0 = (a.type == kTypeDouble) ?
+                     a.value.val_double :
+                     ((a.is_unsigned == true) ?
+                       static_cast<double>(a.value.val_uint64) :
+                       static_cast<double>(a.value.val_int64));
+    double val1 = (b.type == kTypeDouble) ?
+                     b.value.val_double :
+                     ((b.is_unsigned == true) ?
+                       static_cast<double>(b.value.val_uint64) :
+                       static_cast<double>(b.value.val_int64));
+    double res_val = val1 + val0;
+    if (std::isfinite(res_val)) {
+      res->value.val_double = res_val;
+    } else {
+      // overflow
+      return -1;
+    }
+    res->is_unsigned = false;
   }
+
+  res->type = res_type;
 
   return 0;
 }
