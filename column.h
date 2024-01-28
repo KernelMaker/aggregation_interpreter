@@ -1,5 +1,10 @@
-#ifndef INCLUDE_COLUMN_H_
-#define INCLUDE_COLUMN_H_
+/*
+ * Copyright [2024] <Copyright Hopsworks AB>
+ *
+ * Author: Zhao Song
+ */
+#ifndef COLUMN_H_
+#define COLUMN_H_
 
 #include <cstring>
 #include <cstdint>
@@ -18,7 +23,8 @@ enum ColumnType {
 
 class Column {
  public:
-  explicit Column(unsigned char* buf, uint32_t raw_length, uint32_t encoded_length)
+  explicit Column(unsigned char* buf, uint32_t raw_length,
+                 uint32_t encoded_length)
     : buf_(buf), raw_length_(raw_length), encoded_length_(encoded_length),
     type_(kTypeUnknown), is_unsigned_(false) {
     }
@@ -93,7 +99,8 @@ class ColumnDouble : public Column {
 
 class ColumnVarchar : public Column {
  public:
-  explicit ColumnVarchar(const char* buffer, uint32_t buffer_len, unsigned char* buf)
+  explicit ColumnVarchar(const char* buffer, uint32_t buffer_len,
+                        unsigned char* buf)
     : Column(buf, buffer_len, sizeof(uint32_t) + buffer_len) {
       memcpy(buf_,
           reinterpret_cast<unsigned char*>(&raw_length_), sizeof(raw_length_));
@@ -107,4 +114,4 @@ class ColumnVarchar : public Column {
   }
 };
 
-#endif  // INCLUDE_COLUMN_H_
+#endif  // COLUMN_H_

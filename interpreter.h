@@ -1,5 +1,10 @@
-#ifndef INCLUDE_INTERPRETER_H_
-#define INCLUDE_INTERPRETER_H_
+/*
+ * Copyright [2024] <Copyright Hopsworks AB>
+ *
+ * Author: Zhao Song
+ */
+#ifndef INTERPRETER_H_
+#define INTERPRETER_H_
 
 #include <math.h>
 #include <map>
@@ -8,8 +13,8 @@
 #include "record.h"
 
 struct Entry {
- char *ptr;
- uint32_t len;
+  char *ptr;
+  uint32_t len;
 };
 
 enum InterpreterOp {
@@ -25,7 +30,6 @@ enum InterpreterOp {
   kOpMax,
   kOpMin,
   kOpCount,
-  
   kOpTotal
 };
 
@@ -98,8 +102,7 @@ class AggInterpreter {
   bool Init();
 
   bool ProcessRec(Record* rec);
- 
-  void Print(); 
+  void Print();
 
  private:
   const uint32_t* prog_;
@@ -117,4 +120,4 @@ class AggInterpreter {
   std::map<Entry, Entry, EntryCmp>* gb_map_;
   uint32_t n_groups_;
 };
-#endif  // INCLUDE_INTERPRETER_H_
+#endif  // INTERPRETER_H_

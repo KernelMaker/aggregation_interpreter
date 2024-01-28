@@ -1,5 +1,10 @@
-#ifndef INCLUDE_RECORD_H_
-#define INCLUDE_RECORD_H_
+/*
+ * Copyright [2024] <Copyright Hopsworks AB>
+ *
+ * Author: Zhao Song
+ */
+#ifndef RECORD_H_
+#define RECORD_H_
 
 #include "column.h"
 
@@ -35,7 +40,6 @@ class Record {
     cols_[4] = new ColumnVarchar(var_varchar, varchar_length,
                                (unsigned char*)buf_ + pos);
     pos += cols_[4]->raw_length();
-
   }
 
   Column* GetColumn(int col) {
@@ -46,12 +50,12 @@ class Record {
     }
   }
 
-  void Print(); 
-  
+  void Print();
+
  private:
   unsigned char buf_[encoded_length_];
   Column* cols_[n_cols];
   ColumnType cols_type_[n_cols];
 };
 
-#endif  // INCLUDE_RECORD_H_
+#endif  // RECORD_H_

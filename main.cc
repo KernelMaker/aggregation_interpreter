@@ -17,13 +17,13 @@
 /*
  * Aggregation
  *
- * select count(a), sum(b), sum(a+c),sum(c+d) from t group by a;
+ * select count(a), sum(b), sum(a+c),sum(c+d), sum(c-b) from t group by a;
  */
 
 const char* g_chars = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 
-const uint32_t g_prog_len = 18;
-const uint32_t ins_pos = 7;
+const uint32_t g_prog_len = 23;
+const uint32_t ins_pos = 8;
 uint32_t program[g_prog_len];
 
 int main() {
@@ -31,13 +31,14 @@ int main() {
   memset(program, 0, sizeof(program));
   program[0] = ((uint16_t)0x0721) << 16 | (uint16_t)g_prog_len;
   program[1] = ((uint16_t)1) << 16 | // num of cols used in group by
-               ((uint16_t)4); // num of aggregation results
+               ((uint16_t)5); // num of aggregation results
 
   program[2] = 0; // group by cols
   program[3] = kTypeBigInt; // The first aggregation type BIGINT
   program[4] = kTypeDouble; // The second aggregation type DOUBLE
   program[5] = kTypeBigInt; // The third aggregation type BIGINT
   program[6] = kTypeDouble; // The fouth aggregation type DOUBLE
+  program[7] = kTypeDouble; // The fifth aggregation type DOUBLE
 
   program[ins_pos] =
                ((uint8_t)kOpCount) << 26 |                              // COUNT
@@ -104,6 +105,29 @@ int main() {
                 ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
                 (uint16_t)3;                                             // agg_result 3
 
+  program[ins_pos + 11] =
+               ((uint8_t)kOpLoadCol) << 26 |                            // LOADCOL
+               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt
+               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
+               (uint16_t)2;                                              // Column 2
+
+  program[ins_pos + 12] =
+               ((uint8_t)kOpLoadCol) << 26 |                            // LOADCOL
+               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
+               (uint16_t)1;                                              // Column 1
+
+  program[ins_pos + 13] =
+                ((uint8_t)kOpMinus) << 26 |                                   // MINUS
+                1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // unsigned kTypeBitInt (Reg 1)
+                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
+                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
+
+  program[ins_pos + 14] =
+                ((uint8_t)kOpSum) << 26 |                                // SUM
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
+                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
+                (uint16_t)4;                                             // agg_result 4
 
 
   AggInterpreter agg(program, g_prog_len);

@@ -118,39 +118,48 @@ static inline void int6store(unsigned char *T, uint64_t A) {
 #ifdef __cplusplus
 
 inline int16_t sint2korr(const char *pT) {
-  return sint2korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return sint2korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline uint16_t uint2korr(const char *pT) {
-  return uint2korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return uint2korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline uint32_t uint3korr(const char *pT) {
-  return uint3korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return uint3korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline int32_t sint3korr(const char *pT) {
-  return sint3korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return sint3korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline uint32_t uint4korr(const char *pT) {
-  return uint4korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return uint4korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline int32_t sint4korr(const char *pT) {
-  return sint4korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return sint4korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline uint64_t uint6korr(const char *pT) {
-  return uint6korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return uint6korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline uint64_t uint8korr(const char *pT) {
-  return uint8korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return uint8korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline int64_t sint8korr(const char *pT) {
-  return sint8korr(static_cast<const unsigned char *>(static_cast<const void *>(pT)));
+  return sint8korr(static_cast<const unsigned char *>
+      (static_cast<const void *>(pT)));
 }
 
 inline void int2store(char *pT, uint16_t A) {
@@ -188,7 +197,8 @@ inline void float4store(char *V, float M) {
 }
 
 inline double float8get(const char *M) {
-  return float8get(static_cast<const unsigned char *>(static_cast<const void *>(M)));
+  return float8get(static_cast<const unsigned char *>
+      (static_cast<const void *>(M)));
 }
 
 inline void float8store(char *V, double M) {
@@ -241,7 +251,9 @@ inline int32_t longget(const unsigned char *ptr) {
   return val;
 }
 
-inline void longstore(unsigned char *ptr, int32_t val) { memcpy(ptr, &val, sizeof(val)); }
+inline void longstore(unsigned char *ptr, int32_t val) {
+  memcpy(ptr, &val, sizeof(val));
+}
 
 inline uint32_t ulongget(const unsigned char *ptr) {
   uint32_t val;
@@ -323,11 +335,13 @@ inline uint32_t load32be(const unsigned char *ptr) {
 }
 
 inline unsigned char *store16be(unsigned char *ptr, uint16_t val) {
-  return pointer_cast<unsigned char *>(store16be(pointer_cast<char *>(ptr), val));
+  return pointer_cast<unsigned char *>(
+      store16be(pointer_cast<char *>(ptr), val));
 }
 
 inline unsigned char *store32be(unsigned char *ptr, uint32_t val) {
-  return pointer_cast<unsigned char *>(store32be(pointer_cast<char *>(ptr), val));
+  return pointer_cast<unsigned char *>(
+      store32be(pointer_cast<char *>(ptr), val));
 }
 
 #endif /* __cplusplus */

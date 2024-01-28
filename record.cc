@@ -1,3 +1,8 @@
+/*
+ * Copyright [2024] <Copyright Hopsworks AB>
+ *
+ * Author: Zhao Song
+ */
 #include <stdio.h>
 
 #include "record.h"

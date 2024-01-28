@@ -80,9 +80,13 @@ static inline int64_t sint8korr(const unsigned char *A) {
   return ret;
 }
 
-static inline void int2store(unsigned char *T, uint16_t A) { memcpy(T, &A, sizeof(A)); }
+static inline void int2store(unsigned char *T, uint16_t A) {
+  memcpy(T, &A, sizeof(A));
+}
 
-static inline void int4store(unsigned char *T, uint32_t A) { memcpy(T, &A, sizeof(A)); }
+static inline void int4store(unsigned char *T, uint32_t A) {
+  memcpy(T, &A, sizeof(A));
+}
 
 static inline void int7store(unsigned char *T, uint64_t A) { memcpy(T, &A, 7); }
 

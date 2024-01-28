@@ -1,26 +1,20 @@
+/*
+ * Copyright [2024] <Copyright Hopsworks AB>
+ *
+ * Author: Zhao Song
+ */
 #include <assert.h>
 #include <stdio.h>
 #include <climits>
+#include <utility>
 
 #include "interpreter.h"
-
-// int64_t CheckIntegerOverflow(int64_t value, bool val_unsigned) {
-// 	// TODO input unsigned_flag
-// 	bool unsigned_flag = false;
-// 	if ((unsigned_flag && !val_unsigned && value < 0) ||
-// 			(!unsigned_flag && val_unsigned &&
-// 			 (ulonglong)value > (ulonglong)LLONG_MAX)) {
-// 		return -1;
-// 	}
-// 	return value;
-// }
 
 bool TestIfSumOverflowsUint64(uint64_t arg1, uint64_t arg2) {
   return ULLONG_MAX - arg1 < arg2;
 }
 
 int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
-
   DataType res_type = kTypeUnknown;
   if (a.type == kTypeDouble || b.type == kTypeDouble) {
     res_type = kTypeDouble;
@@ -97,7 +91,7 @@ int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
                      ((b.is_unsigned == true) ?
                        static_cast<double>(b.value.val_uint64) :
                        static_cast<double>(b.value.val_int64));
-    double res_val = val1 + val0;
+    double res_val = val0 + val1;
     if (std::isfinite(res_val)) {
       res->value.val_double = res_val;
     } else {
@@ -109,6 +103,99 @@ int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
 
   res->type = res_type;
 
+  return 0;
+}
+
+int32_t RegMinusReg(const Register& a, const Register& b, Register* res) {
+  DataType res_type = kTypeUnknown;
+  if (a.type == kTypeDouble || b.type == kTypeDouble) {
+    res_type = kTypeDouble;
+  } else {
+    assert(a.type == kTypeBigInt && b.type == kTypeBigInt);
+    res_type = kTypeBigInt;
+  }
+
+  if (res_type == kTypeBigInt) {
+    int64_t val0 = a.value.val_int64;
+    int64_t val1 = b.value.val_int64;
+    int64_t res_val = static_cast<uint64_t>(val0) - static_cast<uint64_t>(val1);
+    bool res_unsigned = false;
+
+    if (a.is_unsigned) {
+      if (b.is_unsigned) {
+        if (static_cast<uint64_t>(val0) < static_cast<uint64_t>(val1)) {
+          if (res_val >= 0) {
+            // overflow
+            return -1;
+          } else {
+            res_unsigned = true;
+          }
+        }
+      } else {
+        if (val1 >= 0) {
+          if (static_cast<uint64_t>(val0) > static_cast<uint64_t>(val1)) {
+            res_unsigned = true;
+          }
+        } else {
+          if (TestIfSumOverflowsUint64((uint64_t)val0, (uint64_t)-val1)) {
+            // overflow
+            return -1;
+          } else {
+            res_unsigned = true;
+          }
+        }
+      }
+    } else {
+      if (b.is_unsigned) {
+        if (static_cast<uint64_t>(val0) - LLONG_MIN <
+            static_cast<uint64_t>(val1)) {
+          // overflow
+          return -1;
+        } else {
+          if (val0 >= 0 && val1 < 0) {
+            res_unsigned = true;
+          } else if (val0 < 0 && val1 > 0 && res_val >= 0) {
+            // overflow
+            return -1;
+          }
+        }
+      }
+    }
+    // Check if res_val is overflow
+    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    if ((unsigned_flag && !res_unsigned && res_val < 0) ||
+        (!unsigned_flag && res_unsigned &&
+         (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
+      return -1;
+    } else {
+      if (unsigned_flag) {
+        res->value.val_uint64 = res_val;
+      } else {
+        res->value.val_int64 = res_val;
+      }
+    }
+    res->is_unsigned = unsigned_flag;
+  } else {
+    assert(res_type == kTypeDouble);
+    double val0 = (a.type == kTypeDouble) ?
+                     a.value.val_double :
+                     ((a.is_unsigned == true) ?
+                       static_cast<double>(a.value.val_uint64) :
+                       static_cast<double>(a.value.val_int64));
+    double val1 = (b.type == kTypeDouble) ?
+                     b.value.val_double :
+                     ((b.is_unsigned == true) ?
+                       static_cast<double>(b.value.val_uint64) :
+                       static_cast<double>(b.value.val_int64));
+    double res_val = val0 - val1;
+    if (std::isfinite(res_val)) {
+      res->value.val_double = res_val;
+    } else {
+      // overflow
+      return -1;
+    }
+  }
+  res->type = res_type;
   return 0;
 }
 
@@ -126,7 +213,7 @@ int32_t RegStoreToAggResItem(const Register& a, AggResItem* res) {
 int32_t RegIncrToAggResItem(const Register& a, AggResItem* res) {
   assert(res != nullptr && a.type == res->type);
 
-  switch(res->type) {
+  switch (res->type) {
     case kTypeBigInt:
       res->value.val_int64 = a.value.val_int64 + res->value.val_int64;
       break;
@@ -216,7 +303,6 @@ void MinBigUint(uint64_t a, uint64_t b, uint64_t* res) {
 void MinDouble(double a, double b, double* res) {
   *res = a < b ? a : b;
 }
-
 OperItem OperArray[kOpTotal] = {
   OperItem{kOpUnknown, kOpUnknown, nullptr, nullptr, nullptr},
   OperItem{kOpPlus, kOpPlus, &PlusBigInt, &PlusBigUint, &PlusDouble},
@@ -259,7 +345,7 @@ bool AggInterpreter::Init() {
     gb_cols_ = new uint32_t[n_gb_cols_];
 
     uint32_t i = 0;
-    while(i < n_gb_cols_ && cur_pos_ < prog_len_) {
+    while (i < n_gb_cols_ && cur_pos_ < prog_len_) {
       gb_cols_[i++] = prog_[cur_pos_++];
     }
 
@@ -270,7 +356,6 @@ bool AggInterpreter::Init() {
    * 4. Get all aggregation results types
    */
   if (n_agg_results_) {
-
     agg_results_ = new AggResItem[n_agg_results_];
     uint32_t i = 0;
     while (i < n_agg_results_ && cur_pos_ < prog_len_) {
@@ -307,7 +392,6 @@ bool DecodeRawType(uint8_t type, DataType* res) {
 }
 
 bool AggInterpreter::ProcessRec(Record* rec) {
-
   AggResItem* agg_res_ptr = nullptr;
 
   if (n_gb_cols_) {
@@ -366,7 +450,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
     value = prog_[exec_pos++];
     uint8_t op = (value & 0xFC000000) >> 26;
     int ret = 0;
-    switch(op) {
+    switch (op) {
       case kOpPlus:
         raw_type = (value & 0x03E00000) >> 21;
         raw_type2 = (value & 0x001F0000) >> 16;
@@ -387,6 +471,24 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         break;
 
       case kOpMinus:
+        raw_type = (value & 0x03E00000) >> 21;
+        raw_type2 = (value & 0x001F0000) >> 16;
+        is_unsigned = DecodeRawType(raw_type, &type);
+        is_unsigned2 = DecodeRawType(raw_type2, &type2);
+
+        reg_index = (value & 0x0000F000) >> 12;
+        reg_index2 = (value & 0x00000F00) >> 8;
+
+        assert(registers_[reg_index].type == kTypeBigInt ||
+              registers_[reg_index].type == kTypeDouble);
+        assert(registers_[reg_index2].type == kTypeBigInt ||
+              registers_[reg_index2].type == kTypeDouble);
+
+        ret = RegMinusReg(registers_[reg_index], registers_[reg_index2],
+                              &registers_[reg_index]);
+        assert(ret == 0);
+        break;
+
       case kOpMul:
       case kOpDiv:
       case kOpMod:
@@ -399,7 +501,8 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         col_index = (value & 0x0000FFFF);
 
         col = rec->GetColumn(col_index);
-        assert(type == CeilType(col->type()) && col->raw_length() == sizeof(Register::value));
+        assert(type == CeilType(col->type()) &&
+            col->raw_length() == sizeof(Register::value));
 
         registers_[reg_index].type = type;
         registers_[reg_index].is_unsigned = is_unsigned;
@@ -420,7 +523,8 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         reg_index = (value & 0x000F0000) >> 16;
         agg_index = (value & 0x0000FFFF);
         assert(type == registers_[reg_index].type);
-        ret = RegStoreToAggResItem(registers_[reg_index], &agg_res_ptr[agg_index]);
+        ret = RegStoreToAggResItem(registers_[reg_index],
+                      &agg_res_ptr[agg_index]);
         assert(ret == 0);
         break;
 
@@ -430,8 +534,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         is_unsigned = DecodeRawType(raw_type, &type);
         agg_index = (value & 0x0000FFFF);
         assert(type == agg_results_[agg_index].type);
-        // TODO Uint
-        ret = RegIncrToAggResItem(Register{kTypeBigInt, 1}, &agg_res_ptr[agg_index]);
+        // TODO(zhao) Uint
+        ret = RegIncrToAggResItem(Register{kTypeBigInt, 1},
+                      &agg_res_ptr[agg_index]);
         assert(ret == 0);
         break;
 
@@ -442,7 +547,8 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         agg_index = (value & 0x0000FFFF);
         assert(type == agg_results_[agg_index].type);
 
-        ret = RegIncrToAggResItem(registers_[reg_index], &agg_res_ptr[agg_index]);
+        ret = RegIncrToAggResItem(registers_[reg_index],
+                      &agg_res_ptr[agg_index]);
 
         assert(ret == 0);
         break;
@@ -451,12 +557,10 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         break;
     }
   }
-  
   return true;
 }
 
 void AggInterpreter::Print() {
-
   if (n_gb_cols_) {
     if (gb_map_) {
       printf("Group by columns: [");
@@ -467,10 +571,10 @@ void AggInterpreter::Print() {
 
       for (auto iter = gb_map_->begin(); iter != gb_map_->end(); iter++) {
         printf("Group [%p, %u], Aggregation result: [",
-            (void*)iter->first.ptr, iter->first.len);
+            reinterpret_cast<void*>(iter->first.ptr), iter->first.len);
         AggResItem* item = reinterpret_cast<AggResItem*>(iter->second.ptr);
         for (int i = 0; i < n_agg_results_; i++) {
-          switch(item[i].type) {
+          switch (item[i].type) {
             case kTypeBigInt:
               printf("(kTypeBigInt: %ld) ", item[i].value.val_int64);
               break;
@@ -492,7 +596,7 @@ void AggInterpreter::Print() {
     printf("Aggregation result: [");
     AggResItem* item = agg_results_;
     for (int i = 0; i < n_agg_results_; i++) {
-      switch(item[i].type) {
+      switch (item[i].type) {
         case kTypeBigInt:
           printf("(kTypeBigInt: %ld) ", item[i].value.val_int64);
           break;
