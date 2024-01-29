@@ -10,6 +10,21 @@
 
 #include "interpreter.h"
 
+#define INT_MIN64 (~0x7FFFFFFFFFFFFFFFLL)
+#define INT_MAX64 0x7FFFFFFFFFFFFFFFLL
+#define INT_MIN32 (~0x7FFFFFFFL)
+#define INT_MAX32 0x7FFFFFFFL
+#define UINT_MAX32 0xFFFFFFFFL
+#define INT_MIN24 (~0x007FFFFF)
+#define INT_MAX24 0x007FFFFF
+#define UINT_MAX24 0x00FFFFFF
+#define INT_MIN16 (~0x7FFF)
+#define INT_MAX16 0x7FFF
+#define UINT_MAX16 0xFFFF
+#define INT_MIN8 (~0x7F)
+#define INT_MAX8 0x7F
+#define UINT_MAX8 0xFF
+
 bool TestIfSumOverflowsUint64(uint64_t arg1, uint64_t arg2) {
   return ULLONG_MAX - arg1 < arg2;
 }
@@ -193,6 +208,238 @@ int32_t RegMinusReg(const Register& a, const Register& b, Register* res) {
     } else {
       // overflow
       return -1;
+    }
+  }
+  res->type = res_type;
+  return 0;
+}
+
+int32_t RegMulReg(const Register& a, const Register& b, Register* res) {
+  DataType res_type = kTypeUnknown;
+  if (a.type == kTypeDouble || b.type == kTypeDouble) {
+    res_type = kTypeDouble;
+  } else {
+    assert(a.type == kTypeBigInt && b.type == kTypeBigInt);
+    res_type = kTypeBigInt;
+  }
+
+  if (res_type == kTypeBigInt) {
+    int64_t val0 = a.value.val_int64;
+    int64_t val1 = b.value.val_int64;
+    int64_t res_val;
+    uint64_t res_val0;
+    uint64_t res_val1;
+
+    if (val0 == 0 || val1 == 0) {
+      res->type = res_type;
+      return 0;
+    }
+
+    const bool a_negative = (!a.is_unsigned && val0 < 0);
+    const bool b_negative = (!b.is_unsigned && val1 < 0);
+    const bool res_unsigned = (a_negative == b_negative);
+
+    if (a_negative && val0 == INT_MIN64) {
+      if (val1 == 1) {
+        // Check if val0 is overflow
+        bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+        if ((unsigned_flag && !res_unsigned && val0 < 0) ||
+            (!unsigned_flag && res_unsigned &&
+             (uint64_t)val0 > (uint64_t)LLONG_MAX)) {
+          return -1;
+        } else {
+          if (unsigned_flag) {
+            res->value.val_uint64 = val0;
+          } else {
+            res->value.val_int64 = val0;
+          }
+        }
+        res->is_unsigned = unsigned_flag;
+        res->type = res_type;
+        return 0;
+      }
+    }
+    if (b_negative && val1 == INT_MIN64) {
+      if (val0 == 1) {
+        // Check if val1 is overflow
+        bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+        if ((unsigned_flag && !res_unsigned && val1 < 0) ||
+            (!unsigned_flag && res_unsigned &&
+             (uint64_t)val1 > (uint64_t)LLONG_MAX)) {
+          return -1;
+        } else {
+          if (unsigned_flag) {
+            res->value.val_uint64 = val1;
+          } else {
+            res->value.val_int64 = val1;
+          }
+        }
+        res->is_unsigned = unsigned_flag;
+        res->type = res_type;
+        return 0;
+      }
+    }
+
+    if (a_negative) {
+      val0 = -val0;
+    }
+    if (b_negative) {
+      val1 = -val1;
+    }
+
+    uint32_t a0 = 0xFFFFFFFFUL & val0;
+    uint32_t a1 = static_cast<uint64_t>(val0) >> 32;
+    uint32_t b0 = 0xFFFFFFFFUL & val1;
+    uint32_t b1 = static_cast<uint64_t>(val1) >> 32;
+
+    if (a1 && b1) {
+      // overflow
+      return -1;
+    }
+
+    res_val1 = static_cast<uint64_t>(a1) * b0 + static_cast<uint64_t>(a0) * b1;
+    if (res_val1 > 0xFFFFFFFFUL) {
+      // overflow
+      return -1;
+    }
+
+    res_val1 = res_val1 << 32;
+    res_val0 = static_cast<uint64_t>(a0) * b0;
+    if (TestIfSumOverflowsUint64(res_val1, res_val0)) {
+      // overflow
+      return -1;
+    } else {
+      res_val = res_val1 + res_val0;
+    }
+
+    if (a_negative != b_negative) {
+      if (static_cast<uint64_t>(res_val) > static_cast<uint64_t>(LLONG_MAX)) {
+        // overflow
+        return -1;
+      } else {
+        res_val = -res_val;
+      }
+    }
+
+    // Check if res_val is overflow
+    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    if ((unsigned_flag && !res_unsigned && res_val < 0) ||
+        (!unsigned_flag && res_unsigned &&
+         (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
+      return -1;
+    } else {
+      if (unsigned_flag) {
+        res->value.val_uint64 = res_val;
+      } else {
+        res->value.val_int64 = res_val;
+      }
+    }
+    res->is_unsigned = unsigned_flag;
+  } else {
+    assert(res_type == kTypeDouble);
+    double val0 = (a.type == kTypeDouble) ?
+                     a.value.val_double :
+                     ((a.is_unsigned == true) ?
+                       static_cast<double>(a.value.val_uint64) :
+                       static_cast<double>(a.value.val_int64));
+    double val1 = (b.type == kTypeDouble) ?
+                     b.value.val_double :
+                     ((b.is_unsigned == true) ?
+                       static_cast<double>(b.value.val_uint64) :
+                       static_cast<double>(b.value.val_int64));
+    double res_val = val0 * val1;
+    if (std::isfinite(res_val)) {
+      res->value.val_double = res_val;
+    } else {
+      // overflow
+      return -1;
+    }
+  }
+  res->type = res_type;
+  return 0;
+}
+
+int32_t RegDivReg(const Register& a, const Register& b, Register* res) {
+  DataType res_type = kTypeUnknown;
+  if (a.type == kTypeDouble || b.type == kTypeDouble) {
+    res_type = kTypeDouble;
+  } else {
+    assert(a.type == kTypeBigInt && b.type == kTypeBigInt);
+    res_type = kTypeBigInt;
+  }
+
+  if (res_type == kTypeBigInt) {
+    int64_t val0 = a.value.val_int64;
+    int64_t val1 = b.value.val_int64;
+    bool val0_negative, val1_negative, res_negative, res_unsigned;
+    uint64_t uval0, uval1, res_val;
+
+    val0_negative = !a.is_unsigned && val0 < 0;
+    val1_negative = !b.is_unsigned && val1 < 0;
+    res_negative = val0_negative != val1_negative;
+    res_unsigned = !res_negative;
+
+    if (val1 == 0) {
+      // Divide by zero
+      if (res_unsigned) {
+        res->value.val_uint64 = 0;
+      } else {
+        res->value.val_int64 = 0;
+      }
+      res->type = res_type;
+      res->is_unsigned = res_unsigned;
+    }
+
+    uval0 = static_cast<uint64_t>(val0_negative &&
+                      val0 != LLONG_MIN ? -val0 : val0);
+    uval1 = static_cast<uint64_t>(val1_negative &&
+                      val1 != LLONG_MIN ? -val1 : val1);
+    res_val = uval0 / uval1;
+    if (res_negative) {
+      if (res_val > static_cast<uint64_t>(LLONG_MAX)) {
+        // overflow
+        return -1;
+      } else {
+        res_val = static_cast<uint64_t>(-static_cast<int64_t>(res_val));
+      }
+    }
+    // Check if res_val is overflow
+    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    if ((unsigned_flag && !res_unsigned && res_val < 0) ||
+        (!unsigned_flag && res_unsigned &&
+         (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
+      return -1;
+    } else {
+      if (unsigned_flag) {
+        res->value.val_uint64 = res_val;
+      } else {
+        res->value.val_int64 = res_val;
+      }
+    }
+    res->is_unsigned = unsigned_flag;
+  } else {
+    assert(res_type == kTypeDouble);
+    double val0 = (a.type == kTypeDouble) ?
+                     a.value.val_double :
+                     ((a.is_unsigned == true) ?
+                       static_cast<double>(a.value.val_uint64) :
+                       static_cast<double>(a.value.val_int64));
+    double val1 = (b.type == kTypeDouble) ?
+                     b.value.val_double :
+                     ((b.is_unsigned == true) ?
+                       static_cast<double>(b.value.val_uint64) :
+                       static_cast<double>(b.value.val_int64));
+    if (val1 == 0) {
+      // Divided by zero
+      res->value.val_double = 0.0;
+    } else {
+      double res_val = val0 / val1;
+      if (std::isfinite(res_val)) {
+        res->value.val_double = res_val;
+      } else {
+        // overflow
+        return -1;
+      }
     }
   }
   res->type = res_type;
@@ -490,7 +737,43 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         break;
 
       case kOpMul:
+        raw_type = (value & 0x03E00000) >> 21;
+        raw_type2 = (value & 0x001F0000) >> 16;
+        is_unsigned = DecodeRawType(raw_type, &type);
+        is_unsigned2 = DecodeRawType(raw_type2, &type2);
+
+        reg_index = (value & 0x0000F000) >> 12;
+        reg_index2 = (value & 0x00000F00) >> 8;
+
+        assert(registers_[reg_index].type == kTypeBigInt ||
+              registers_[reg_index].type == kTypeDouble);
+        assert(registers_[reg_index2].type == kTypeBigInt ||
+              registers_[reg_index2].type == kTypeDouble);
+
+        ret = RegMulReg(registers_[reg_index], registers_[reg_index2],
+                              &registers_[reg_index]);
+        assert(ret == 0);
+        break;
+
       case kOpDiv:
+        raw_type = (value & 0x03E00000) >> 21;
+        raw_type2 = (value & 0x001F0000) >> 16;
+        is_unsigned = DecodeRawType(raw_type, &type);
+        is_unsigned2 = DecodeRawType(raw_type2, &type2);
+
+        reg_index = (value & 0x0000F000) >> 12;
+        reg_index2 = (value & 0x00000F00) >> 8;
+
+        assert(registers_[reg_index].type == kTypeBigInt ||
+              registers_[reg_index].type == kTypeDouble);
+        assert(registers_[reg_index2].type == kTypeBigInt ||
+              registers_[reg_index2].type == kTypeDouble);
+
+        ret = RegDivReg(registers_[reg_index], registers_[reg_index2],
+                              &registers_[reg_index]);
+        assert(ret == 0);
+        break;
+
       case kOpMod:
         break;
 
