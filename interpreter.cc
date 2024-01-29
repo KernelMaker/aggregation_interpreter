@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <climits>
 #include <utility>
+#include <limits>
 
 #include "interpreter.h"
 
@@ -446,14 +447,201 @@ int32_t RegDivReg(const Register& a, const Register& b, Register* res) {
   return 0;
 }
 
-int32_t RegStoreToAggResItem(const Register& a, AggResItem* res) {
-  DataType type1 = a.type;
-  DataType type2 = res->type;
+int32_t RegModReg(const Register& a, const Register& b, Register* res) {
+  DataType res_type = kTypeUnknown;
+  if (a.type == kTypeDouble || b.type == kTypeDouble) {
+    res_type = kTypeDouble;
+  } else {
+    assert(a.type == kTypeBigInt && b.type == kTypeBigInt);
+    res_type = kTypeBigInt;
+  }
 
-  assert(type1 == type2 && type1 == kTypeBigInt);
+  if (res_type == kTypeBigInt) {
+    int64_t val0 = a.value.val_int64;
+    int64_t val1 = b.value.val_int64;
+    bool val0_negative, val1_negative, res_unsigned;
+    uint64_t uval0, uval1, res_val;
 
-  // case kTypeBigInt
-  res->value.val_int64 = a.value.val_int64;
+    val0_negative = !a.is_unsigned && val0 < 0;
+    val1_negative = !b.is_unsigned && val1 < 0;
+    res_unsigned = !val0_negative;
+
+    if (val1 == 0) {
+      // Divide by zero
+      if (res_unsigned) {
+        res->value.val_uint64 = 0;
+      } else {
+        res->value.val_int64 = 0;
+      }
+      res->type = res_type;
+      res->is_unsigned = res_unsigned;
+    }
+
+    uval0 = static_cast<uint64_t>(val0_negative &&
+                      val0 != LLONG_MIN ? -val0 : val0);
+    uval1 = static_cast<uint64_t>(val1_negative &&
+                      val1 != LLONG_MIN ? -val1 : val1);
+    res_val = uval0 % uval1;
+    res_val = res_unsigned ? res_val : -res_val;
+
+    // Check if res_val is overflow
+    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    if ((unsigned_flag && !res_unsigned && res_val < 0) ||
+        (!unsigned_flag && res_unsigned &&
+         (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
+      return -1;
+    } else {
+      if (unsigned_flag) {
+        res->value.val_uint64 = res_val;
+      } else {
+        res->value.val_int64 = res_val;
+      }
+    }
+    res->is_unsigned = unsigned_flag;
+  } else {
+    assert(res_type == kTypeDouble);
+    double val0 = (a.type == kTypeDouble) ?
+                     a.value.val_double :
+                     ((a.is_unsigned == true) ?
+                       static_cast<double>(a.value.val_uint64) :
+                       static_cast<double>(a.value.val_int64));
+    double val1 = (b.type == kTypeDouble) ?
+                     b.value.val_double :
+                     ((b.is_unsigned == true) ?
+                       static_cast<double>(b.value.val_uint64) :
+                       static_cast<double>(b.value.val_int64));
+    if (val1 == 0) {
+      // Divided by zero
+      res->value.val_double = 0.0;
+    } else {
+      res->value.val_double = std::fmod(val0, val1);
+    }
+  }
+  res->type = res_type;
+  return 0;
+}
+
+int32_t Min(const Register& a, AggResItem* res) {
+  assert(res != nullptr && a.type == res->type);
+  // assert(res != nullptr && a.is_unsigned == res->is_unsigned);
+  DataType res_type = kTypeUnknown;
+  if (a.type == kTypeDouble) {
+    res_type = kTypeDouble;
+  } else {
+    assert(a.type == kTypeBigInt);
+    res_type = kTypeBigInt;
+  }
+
+  if (res_type == kTypeBigInt) {
+    if (!a.is_unsigned && !res->is_unsigned) {
+      if (res->inited == false) {
+        res->value.val_int64 = LLONG_MAX;
+        res->inited = true;
+      }
+      res->value.val_int64 = (a.value.val_int64 < res->value.val_int64) ?
+                              a.value.val_int64 : res->value.val_int64;
+    } else if (a.is_unsigned && res->is_unsigned) {
+      if (res->inited == false) {
+        res->value.val_uint64 = ULLONG_MAX;
+        res->inited = true;
+      }
+      res->value.val_uint64 = (a.value.val_uint64 < res->value.val_uint64) ?
+                              a.value.val_uint64 : res->value.val_uint64;
+    } else if (a.is_unsigned && !res->is_unsigned) {
+      if (res->inited == false) {
+        res->value.val_int64 = LLONG_MAX;
+        res->inited = true;
+      }
+      if (res->value.val_int64 < 0) {
+      } else {
+        res->value.val_uint64 = a.value.val_uint64 <
+                static_cast<uint64_t>(res->value.val_int64) ?
+                a.value.val_uint64 :
+                static_cast<uint64_t>(res->value.val_int64);
+        res->is_unsigned = true;
+      }
+    } else {
+      assert(!a.is_unsigned && res->is_unsigned);
+      if (res->inited == false) {
+        res->value.val_uint64 = LLONG_MAX;
+        res->inited = true;
+      }
+      if (a.value.val_int64 < 0) {
+        res->value.val_int64 = a.value.val_int64;
+        res->is_unsigned = false;
+      } else {
+        res->value.val_uint64 = static_cast<uint64_t>(a.value.val_int64) <
+                                res->value.val_uint64 ?
+                                static_cast<uint64_t>(a.value.val_int64) :
+                                res->value.val_uint64;
+      }
+    }
+  } else {
+    assert(res_type == kTypeDouble);
+    res->value.val_double = (a.value.val_double < res->value.val_double) ?
+                             a.value.val_double : res->value.val_double;
+  }
+  return 0;
+}
+
+int32_t Max(const Register& a, AggResItem* res) {
+  assert(res != nullptr && a.type == res->type);
+  // assert(res != nullptr && a.is_unsigned == res->is_unsigned);
+  DataType res_type = kTypeUnknown;
+  if (a.type == kTypeDouble) {
+    res_type = kTypeDouble;
+  } else {
+    assert(a.type == kTypeBigInt);
+    res_type = kTypeBigInt;
+  }
+
+  if (res_type == kTypeBigInt) {
+    if (!a.is_unsigned && !res->is_unsigned) {
+      if (res->inited == false) {
+        res->value.val_int64 = INT_MIN64;
+        res->inited = true;
+      }
+      res->value.val_int64 = (a.value.val_int64 > res->value.val_int64) ?
+                              a.value.val_int64 : res->value.val_int64;
+    } else if (a.is_unsigned && res->is_unsigned) {
+      if (res->inited == false) {
+        res->value.val_uint64 = 0;
+        res->inited = true;
+      }
+      res->value.val_uint64 = (a.value.val_uint64 > res->value.val_uint64) ?
+                              a.value.val_uint64 : res->value.val_uint64;
+    } else if (a.is_unsigned && !res->is_unsigned) {
+      if (res->inited == false) {
+        res->value.val_int64 = 0;
+        res->inited = true;
+      }
+      if (res->value.val_int64 < 0) {
+        res->value.val_uint64 = a.value.val_uint64;
+      } else {
+        res->value.val_uint64 = a.value.val_uint64 >
+                static_cast<uint64_t>(res->value.val_int64) ?
+                a.value.val_uint64 :
+                static_cast<uint64_t>(res->value.val_int64);
+      }
+      res->is_unsigned = true;
+    } else {
+      assert(!a.is_unsigned && res->is_unsigned);
+      if (res->inited == false) {
+        res->value.val_uint64 = 0;
+        res->inited = true;
+      }
+      if (a.value.val_int64 < 0) {
+      } else {
+        res->value.val_uint64 = static_cast<uint64_t>(a.value.val_int64) >
+                                res->value.val_uint64;
+      }
+    }
+  } else {
+    assert(res_type == kTypeDouble);
+    res->value.val_double = (a.value.val_double > res->value.val_double) ?
+                             a.value.val_double : res->value.val_double;
+  }
+
   return 0;
 }
 
@@ -472,97 +660,6 @@ int32_t RegIncrToAggResItem(const Register& a, AggResItem* res) {
   }
   return 0;
 }
-
-struct OperItem {
-  uint8_t op;
-  uint8_t index;
-  void (*FuncBigInt)(int64_t, int64_t, int64_t*);
-  void (*FuncBigUint)(uint64_t, uint64_t, uint64_t*);
-  void (*FuncDouble)(double, double, double*);
-};
-
-void PlusBigInt(int64_t a, int64_t b, int64_t* res) {
-  *res = a + b;
-}
-void PlusBigUint(uint64_t a, uint64_t b, uint64_t* res) {
-  *res = a + b;
-}
-void PlusDouble(double a, double b, double* res) {
-  *res = a + b;
-}
-
-void MinusBigInt(int64_t a, int64_t b, int64_t* res) {
-  *res = a - b;
-}
-void MinusBigUint(uint64_t a, uint64_t b, uint64_t* res) {
-  *res = a - b;
-}
-void MinusDouble(double a, double b, double* res) {
-  *res = a - b;
-}
-
-void MulBigInt(int64_t a, int64_t b, int64_t* res) {
-  *res = a * b;
-}
-void MulBigUint(uint64_t a, uint64_t b, uint64_t* res) {
-  *res = a * b;
-}
-void MulDouble(double a, double b, double* res) {
-  *res = a * b;
-}
-
-void DivBigInt(int64_t a, int64_t b, int64_t* res) {
-  *res = a / b;
-}
-void DivBigUint(uint64_t a, uint64_t b, uint64_t* res) {
-  *res = a / b;
-}
-void DivDouble(double a, double b, double* res) {
-  *res = a / b;
-}
-
-void ModBigInt(int64_t a, int64_t b, int64_t* res) {
-  *res = a % b;
-}
-void ModBigUint(uint64_t a, uint64_t b, uint64_t* res) {
-  *res = a % b;
-}
-void ModDouble(double a, double b, double* res) {
-  *res = std::fmod(a, b);
-}
-
-void MaxBigInt(int64_t a, int64_t b, int64_t* res) {
-  *res = a > b ? a : b;
-}
-void MaxBigUint(uint64_t a, uint64_t b, uint64_t* res) {
-  *res = a > b ? a : b;
-}
-void MaxDouble(double a, double b, double* res) {
-  *res = a > b ? a : b;
-}
-
-void MinBigInt(int64_t a, int64_t b, int64_t* res) {
-  *res = a < b ? a : b;
-}
-void MinBigUint(uint64_t a, uint64_t b, uint64_t* res) {
-  *res = a < b ? a : b;
-}
-void MinDouble(double a, double b, double* res) {
-  *res = a < b ? a : b;
-}
-OperItem OperArray[kOpTotal] = {
-  OperItem{kOpUnknown, kOpUnknown, nullptr, nullptr, nullptr},
-  OperItem{kOpPlus, kOpPlus, &PlusBigInt, &PlusBigUint, &PlusDouble},
-  OperItem{kOpMinus, kOpMinus, &MinusBigInt, &MinusBigUint, &MinusDouble},
-  OperItem{kOpMul, kOpMul, &MulBigInt, &MulBigUint, &MulDouble},
-  OperItem{kOpDiv, kOpDiv, &DivBigInt, &DivBigUint, &DivDouble},
-  OperItem{kOpMod, kOpMod, &ModBigInt, &ModBigUint, &ModDouble},
-  OperItem{kOpLoadCol, kOpLoadCol, nullptr, nullptr, nullptr},
-  OperItem{kOpSum, kOpSum, &PlusBigInt, &PlusBigUint, &PlusDouble},
-  OperItem{kOpMax, kOpMax, &MaxBigInt, &MaxBigUint, &MaxDouble},
-  OperItem{kOpMin, kOpMin, &MinBigInt, &MinBigUint, &MinDouble},
-  OperItem{kOpCount, kOpCount, &PlusBigInt, &PlusBigUint, nullptr}
-};
 
 bool AggInterpreter::Init() {
   if (inited_) {
@@ -607,6 +704,7 @@ bool AggInterpreter::Init() {
     uint32_t i = 0;
     while (i < n_agg_results_ && cur_pos_ < prog_len_) {
       agg_results_[i].type = prog_[cur_pos_++];
+      agg_results_[i].inited = false;  // used by Min/Max
       agg_results_[i++].value.val_int64 = 0;
     }
   }
@@ -775,6 +873,23 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         break;
 
       case kOpMod:
+        raw_type = (value & 0x03E00000) >> 21;
+        raw_type2 = (value & 0x001F0000) >> 16;
+        is_unsigned = DecodeRawType(raw_type, &type);
+        is_unsigned2 = DecodeRawType(raw_type2, &type2);
+
+        reg_index = (value & 0x0000F000) >> 12;
+        reg_index2 = (value & 0x00000F00) >> 8;
+
+        assert(registers_[reg_index].type == kTypeBigInt ||
+              registers_[reg_index].type == kTypeDouble);
+        assert(registers_[reg_index2].type == kTypeBigInt ||
+              registers_[reg_index2].type == kTypeDouble);
+
+        ret = RegModReg(registers_[reg_index], registers_[reg_index2],
+                              &registers_[reg_index]);
+        assert(ret == 0);
+
         break;
 
       case kOpLoadCol:
@@ -800,24 +915,11 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         }
         break;
 
-      case kOpStore:
-        raw_type = (value & 0x03E00000) >> 21;
-        is_unsigned = DecodeRawType(raw_type, &type);
-        reg_index = (value & 0x000F0000) >> 16;
-        agg_index = (value & 0x0000FFFF);
-        assert(type == registers_[reg_index].type);
-        ret = RegStoreToAggResItem(registers_[reg_index],
-                      &agg_res_ptr[agg_index]);
-        assert(ret == 0);
-        break;
-
-
       case kOpCount:
         raw_type = (value & 0x03E00000) >> 21;
         is_unsigned = DecodeRawType(raw_type, &type);
         agg_index = (value & 0x0000FFFF);
         assert(type == agg_results_[agg_index].type);
-        // TODO(zhao) Uint
         ret = RegIncrToAggResItem(Register{kTypeBigInt, 1},
                       &agg_res_ptr[agg_index]);
         assert(ret == 0);
@@ -832,6 +934,30 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegIncrToAggResItem(registers_[reg_index],
                       &agg_res_ptr[agg_index]);
+
+        assert(ret == 0);
+        break;
+
+       case kOpMax:
+        raw_type = (value & 0x03E00000) >> 21;
+        is_unsigned = DecodeRawType(raw_type, &type);
+        reg_index = (value & 0x000F0000) >> 16;
+        agg_index = (value & 0x0000FFFF);
+        assert(type == agg_results_[agg_index].type);
+
+        ret = Max(registers_[reg_index], &agg_res_ptr[agg_index]);
+
+        assert(ret == 0);
+        break;
+
+       case kOpMin:
+        raw_type = (value & 0x03E00000) >> 21;
+        is_unsigned = DecodeRawType(raw_type, &type);
+        reg_index = (value & 0x000F0000) >> 16;
+        agg_index = (value & 0x0000FFFF);
+        assert(type == agg_results_[agg_index].type);
+
+        ret = Min(registers_[reg_index], &agg_res_ptr[agg_index]);
 
         assert(ret == 0);
         break;
@@ -853,20 +979,17 @@ void AggInterpreter::Print() {
       printf("]\n");
 
       for (auto iter = gb_map_->begin(); iter != gb_map_->end(); iter++) {
-        printf("Group [%p, %u], Aggregation result: [",
+        printf("Group [%p, %u], Aggregation result: [\n",
             reinterpret_cast<void*>(iter->first.ptr), iter->first.len);
         AggResItem* item = reinterpret_cast<AggResItem*>(iter->second.ptr);
         for (int i = 0; i < n_agg_results_; i++) {
           switch (item[i].type) {
             case kTypeBigInt:
-              printf("(kTypeBigInt: %ld) ", item[i].value.val_int64);
+              printf("    (kTypeBigInt: %ld)\n", item[i].value.val_int64);
               break;
-            // case kTypeBigUint:
-            //   printf("(kTypeBigUint: %lu) ", item[i].value.val_uint64);
-            //   break;
 
             case kTypeDouble:
-              printf("(kTypeDouble: %lf) ", item[i].value.val_double);
+              printf("    (kTypeDouble: %lf)\n", item[i].value.val_double);
               break;
             default:
               assert(0);
@@ -876,18 +999,16 @@ void AggInterpreter::Print() {
       }
     }
   } else {
-    printf("Aggregation result: [");
+    printf("Aggregation result: [\n");
     AggResItem* item = agg_results_;
     for (int i = 0; i < n_agg_results_; i++) {
       switch (item[i].type) {
         case kTypeBigInt:
-          printf("(kTypeBigInt: %ld) ", item[i].value.val_int64);
+          printf("    (kTypeBigInt: %ld)\n", item[i].value.val_int64);
           break;
-        // case kTypeBigUint:
-        //   printf("(kTypeBigUint: %lu) ", item[i].value.val_uint64);
-        //   break;
+
         case kTypeDouble:
-          printf("(kTypeDouble: %lf) ", item[i].value.val_double);
+          printf("    (kTypeDouble: %lf)\n", item[i].value.val_double);
           break;
         default:
           assert(0);

@@ -77,6 +77,7 @@ struct AggResItem {
   DataType type;
   DataValue value;
   bool is_unsigned;
+  bool inited;  // used by Min/Max
 };
 
 class AggInterpreter {
