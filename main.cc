@@ -17,14 +17,13 @@
 /*
  * Aggregation
  *
- * select count(a), sum(b), sum(a+c),sum(c+d), sum(c-b), sum(a*d), sum(d/c), sum(b%c),
- *        max(a+c), min(a+c), max((a+b)*c/d) from t group by a;
+ * select count(a), sum(a/b+c*d), max((a+b)*c/d), min(b%c+d), sum(a+c) from t group by a;
  */
 
 const char* g_chars = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 
-const uint32_t g_prog_len = 57;
-const uint32_t ins_pos = 14;
+const uint32_t g_prog_len = 35;
+const uint32_t ins_pos = 8;
 uint32_t program[g_prog_len];
 
 int main() {
@@ -32,20 +31,14 @@ int main() {
   memset(program, 0, sizeof(program));
   program[0] = ((uint16_t)0x0721) << 16 | (uint16_t)g_prog_len;
   program[1] = ((uint16_t)1) << 16 | // num of cols used in group by
-               ((uint16_t)11); // num of aggregation results
+               ((uint16_t)5); // num of aggregation results
 
   program[2] = 0; // group by column 0
   program[3] = kTypeBigInt; // The first aggregation type BIGINT
   program[4] = kTypeDouble; // The second aggregation type DOUBLE
-  program[5] = kTypeBigInt; // The third aggregation type BIGINT
+  program[5] = kTypeDouble; // The third aggregation type BIGINT
   program[6] = kTypeDouble; // The fouth aggregation type DOUBLE
-  program[7] = kTypeDouble; // The fifth aggregation type DOUBLE
-  program[8] = kTypeDouble; // The sixth aggregation type DOUBLE
-  program[9] = kTypeDouble; // The seventh aggregation type DOUBLE
-  program[10] = kTypeDouble; // The eighth aggregation type DOUBLE
-  program[11] = kTypeBigInt; // The nineth aggregation type BIGINT
-  program[12] = kTypeBigInt; // The tenth aggregation type BIGINT
-  program[13] = kTypeDouble; // The tenth aggregation type BIGINT
+  program[7] = kTypeBigInt; // The fifth aggregation type DOUBLE
 
   program[ins_pos] =
                ((uint8_t)kOpCount) << 26 |                              // COUNT
@@ -53,22 +46,22 @@ int main() {
                (uint16_t)0;                                             // agg_result 0
 
   program[ins_pos + 1] =
-               ((uint8_t)kOpLoadCol) << 26 |                            // LOADCOL
-               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // signed kTypeDouble
-               ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-               (uint16_t)1;                                             // Column 1
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // kTypeBigInt
+               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
+               (uint16_t)0;                                              // Column 0
 
   program[ins_pos + 2] =
-               ((uint8_t)kOpSum) << 26 |                                // SUM
-               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // signed kTypeDouble
-               ((uint8_t)kReg1 & 0x0F) << 16 |                          // register 1
-               (uint16_t)1;                                             // agg_result 1
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
+               (uint16_t)1;                                              // Column 1
 
   program[ins_pos + 3] =
-               ((uint8_t)kOpLoadCol) << 26 |                            // LOADCOL
-               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |            // signed kTypeBigInt
-               ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-               (uint16_t)0;                                             // Column 0
+                ((uint8_t)kOpDiv) << 26 |                                    // DIV
+                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // kTypeBigInt (Reg 1)
+                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
+                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
 
   program[ins_pos + 4] =
                ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
@@ -77,118 +70,118 @@ int main() {
                (uint16_t)2;                                              // Column 2
 
   program[ins_pos + 5] =
-                ((uint8_t)kOpPlus) << 26 |                                   // PLUS
-                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // signed kTypeBigInt (Reg 1)
-                1 << 20 | (uint8_t)(kTypeBigInt << 4) << 12 |                // unsigned kTypeBigInt (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               ((uint8_t)kReg3 & 0x0F) << 16 |                           // Register 3
+               (uint16_t)3;                                              // Column 3
 
   program[ins_pos + 6] =
-                ((uint8_t)kOpSum) << 26 |                                // SUM
-                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |            // signed kTypeBigInt (Reg 1)
-                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-                (uint16_t)2;                                             // agg_result 2
+                ((uint8_t)kOpMul) << 26 |                                    // MUL
+                1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // unsigned kTypeBigInt (Reg 2)
+                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 3)
+                ((uint8_t)kReg2 & 0x0F) << 12 | ((uint8_t)kReg3 & 0xF) << 8; // Register 2, Register 3
 
   program[ins_pos + 7] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt
-               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
-               (uint16_t)2;                                              // Column 2
+                ((uint8_t)kOpPlus) << 26 |                                   // PLUS
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |                // kTypeDouble (Reg 1)
+                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
+                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
 
   program[ins_pos + 8] =
+                ((uint8_t)kOpSum) << 26 |                                // SUM
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
+                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
+                (uint16_t)1;                                             // agg_result 1
+
+  program[ins_pos + 9] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // kTypeBigInt
+               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
+               (uint16_t)0;                                              // Column 0
+
+  program[ins_pos + 10] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
+               (uint16_t)1;                                              // Column 1
+
+  program[ins_pos + 11] =
+                ((uint8_t)kOpPlus) << 26 |                                   // PLUS
+                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // kTypeBigInt (Reg 1)
+                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
+                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
+
+  program[ins_pos + 12] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt
+               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
+               (uint16_t)2;                                              // Column 2
+
+  program[ins_pos + 13] =
+                ((uint8_t)kOpMul) << 26 |                                    // MUL
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |                // kTypeDouble (Reg 1)
+                1 << 20 | (uint8_t)(kTypeBigInt << 4) << 12 |                // unsigned kTypeBigInt (Reg 2)
+                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
+                                                                             
+  program[ins_pos + 14] =
                ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
                ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
                (uint16_t)3;                                              // Column 3
 
-  program[ins_pos + 9] =
-                ((uint8_t)kOpPlus) << 26 |                                   // PLUS
-                1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // unsigned kTypeBigInt (Reg 1)
+  program[ins_pos + 15] =
+                ((uint8_t)kOpDiv) << 26 |                                    // DIV
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |                // kTypeDouble (Reg 1)
                 0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
                 ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
 
-  program[ins_pos + 10] =
-                ((uint8_t)kOpSum) << 26 |                                // SUM
+  program[ins_pos + 16] =
+                ((uint8_t)kOpMax) << 26 |                                // MAX
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
+                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
+                (uint16_t)2;                                             // agg_result 10
+
+  program[ins_pos + 17] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
+               (uint16_t)1;                                              // Column 1
+
+  program[ins_pos + 18] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt
+               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
+               (uint16_t)2;                                              // Column 2
+
+  program[ins_pos + 19] =
+                ((uint8_t)kOpMod) << 26 |                                    // MOD
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |                // kTypeDouble (Reg 1)
+                1 << 20 | (uint8_t)(kTypeBigInt << 4) << 12 |                // unsigned kTypeBigInt (Reg 2)
+                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
+
+  program[ins_pos + 20] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
+               (uint16_t)3;                                              // Column 3
+
+  program[ins_pos + 21] =
+                ((uint8_t)kOpMinus) << 26 |                                  // MINUS
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |                // kTypeDouble (Reg 1)
+                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
+                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
+
+  program[ins_pos + 22] =
+                ((uint8_t)kOpMin) << 26 |                                // MIN
                 0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
                 ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
                 (uint16_t)3;                                             // agg_result 3
 
-  program[ins_pos + 11] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt
-               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
-               (uint16_t)2;                                              // Column 2
-
-  program[ins_pos + 12] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
-               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
-               (uint16_t)1;                                              // Column 1
-
-  program[ins_pos + 13] =
-                ((uint8_t)kOpMinus) << 26 |                                  // MINUS
-                1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // unsigned kTypeBigInt (Reg 1)
-                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
-
-  program[ins_pos + 14] =
-                ((uint8_t)kOpSum) << 26 |                                // SUM
-                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
-                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-                (uint16_t)4;                                             // agg_result 4
-
-  program[ins_pos + 15] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // signed kTypeBigInt
-               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
-               (uint16_t)0;                                              // Column 0
-
-  program[ins_pos + 16] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
-               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
-               (uint16_t)3;                                              // Column 3
-
-  program[ins_pos + 17] =
-                ((uint8_t)kOpMul) << 26 |                                    // MUL
-                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // signed kTypeBigInt (Reg 1)
-                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
-
-  program[ins_pos + 18] =
-                ((uint8_t)kOpSum) << 26 |                                // SUM
-                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
-                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-                (uint16_t)5;                                             // agg_result 5
-
-  program[ins_pos + 19] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
-               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
-               (uint16_t)3;                                              // Column 3
-
-  program[ins_pos + 20] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt 
-               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
-               (uint16_t)2;                                              // Column 2
-
-  program[ins_pos + 21] =
-                ((uint8_t)kOpDiv) << 26 |                                    // DIV
-                1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // kTypeDouble (Reg 1)
-                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // signed kTypeBigInt (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
-
-  program[ins_pos + 22] =
-                ((uint8_t)kOpSum) << 26 |                                // SUM
-                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
-                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-                (uint16_t)6;                                             // agg_result 6
-
   program[ins_pos + 23] =
                ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // kTypeBigInt
                ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
-               (uint16_t)1;                                              // Column 1
+               (uint16_t)0;                                              // Column 0
 
   program[ins_pos + 24] =
                ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
@@ -197,112 +190,17 @@ int main() {
                (uint16_t)2;                                              // Column 2
 
   program[ins_pos + 25] =
-                ((uint8_t)kOpMod) << 26 |                                    // MOD
-                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |                // kTypeDouble (Reg 1)
+                ((uint8_t)kOpPlus) << 26 |                                   // Plus
+                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // kTypeBigInt (Reg 1)
                 1 << 20 | (uint8_t)(kTypeBigInt << 4) << 12 |                // unsigned kTypeBigInt (Reg 2)
                 ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
 
   program[ins_pos + 26] =
                 ((uint8_t)kOpSum) << 26 |                                // SUM
-                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
-                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-                (uint16_t)7;                                             // agg_result 7
-
-  program[ins_pos + 27] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // kTypeBigInt
-               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
-               (uint16_t)0;                                              // Column 0
-
-  program[ins_pos + 28] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt
-               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
-               (uint16_t)2;                                              // Column 2
-
-  program[ins_pos + 29] =
-                ((uint8_t)kOpPlus) << 26 |                                   // PLUS
-                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // kTypeBigInt (Reg 1)
-                1 << 20 | (uint8_t)(kTypeBigInt << 4) << 12 |                // unsigned kTypeBigInt (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
-
-  program[ins_pos + 30] =
-                ((uint8_t)kOpMax) << 26 |                                // MAX
                 0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |            // kTypeBigInt (Reg 1)
                 ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-                (uint16_t)8;                                             // agg_result 8
+                (uint16_t)4;                                             // agg_result 4
 
-  program[ins_pos + 31] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // kTypeBigInt
-               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
-               (uint16_t)0;                                              // Column 0
-
-  program[ins_pos + 32] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt 
-               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
-               (uint16_t)2;                                              // Column 2
-
-  program[ins_pos + 33] =
-                ((uint8_t)kOpPlus) << 26 |                                   // PLUS
-                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // kTypeBigInt (Reg 1)
-                1 << 20 | (uint8_t)(kTypeBigInt << 4) << 12 |                // unsigned kTypeBigInt (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
-
-  program[ins_pos + 34] =
-                ((uint8_t)kOpMin) << 26 |                                // MIN
-                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |            // kTypeBigInt (Reg 1)
-                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-                (uint16_t)9;                                             // agg_result 9
-
-  program[ins_pos + 35] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // kTypeBigInt
-               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
-               (uint16_t)0;                                              // Column 0
-
-  program[ins_pos + 36] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
-               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
-               (uint16_t)1;                                              // Column 1
-
-  program[ins_pos + 37] =
-                ((uint8_t)kOpPlus) << 26 |                                   // PLUS
-                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // kTypeBigInt (Reg 1)
-                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
-
-  program[ins_pos + 38] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt
-               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
-               (uint16_t)2;                                              // Column 2
-
-  program[ins_pos + 39] =
-                ((uint8_t)kOpMul) << 26 |                                    // MUL
-                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |                // kTypeDouble (Reg 1)
-                1 << 20 | (uint8_t)(kTypeBigInt << 4) << 12 |                // unsigned kTypeBigInt (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
-                                                                             //
-  program[ins_pos + 40] =
-               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
-               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
-               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
-               (uint16_t)3;                                              // Column 3
-
-  program[ins_pos + 41] =
-                ((uint8_t)kOpDiv) << 26 |                                    // DIV
-                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |                // kTypeDouble (Reg 1)
-                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
-                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
-
-  program[ins_pos + 42] =
-                ((uint8_t)kOpMax) << 26 |                                // MAX
-                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
-                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-                (uint16_t)10;                                            // agg_result 10
 
 
   AggInterpreter agg(program, g_prog_len);
@@ -311,7 +209,6 @@ int main() {
   rec1.Print();
   agg.ProcessRec(&rec1);
   Record rec2(1, 1.12, 2, 0.11, g_chars + (rand() % 40), 12);
-  // Record rec2(-3, 1.12, 2, 0.11, g_chars + (rand() % 40), 12);
   rec2.Print();
   agg.ProcessRec(&rec2);
   Record rec3(2, 2.22, 1, 1.0, g_chars + (rand() % 40), 12);
@@ -320,7 +217,7 @@ int main() {
   Record rec4(2, -4.22, 3, -3.4, g_chars + (rand() % 40), 12);
   rec4.Print();
   agg.ProcessRec(&rec4);
-  Record rec5(2, -5.111, 0, -5.6, g_chars + (rand() % 40), 12);
+  Record rec5(2, -5.111, 5, -5.6, g_chars + (rand() % 40), 12);
   rec5.Print();
   agg.ProcessRec(&rec5);
 
