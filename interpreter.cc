@@ -30,6 +30,17 @@ bool TestIfSumOverflowsUint64(uint64_t arg1, uint64_t arg2) {
   return ULLONG_MAX - arg1 < arg2;
 }
 
+void SetRegisterNull(Register* reg) {
+  reg->is_null = true;
+  reg->value.val_int64 = 0;
+  reg->is_unsigned = false;
+}
+
+void ResetRegister(Register* reg) {
+  reg->type = kTypeUnknown;
+  SetRegisterNull(reg);
+}
+
 int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
   DataType res_type = kTypeUnknown;
   if (a.type == kTypeDouble || b.type == kTypeDouble) {
@@ -37,6 +48,12 @@ int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
   } else {
     assert(a.type == kTypeBigInt && b.type == kTypeBigInt);
     res_type = kTypeBigInt;
+  }
+
+  if (a.is_null || b.is_null) {
+    SetRegisterNull(res);
+    // NULL
+    return 1;
   }
 
   if (res_type == kTypeBigInt) {
@@ -131,6 +148,12 @@ int32_t RegMinusReg(const Register& a, const Register& b, Register* res) {
     res_type = kTypeBigInt;
   }
 
+  if (a.is_null || b.is_null) {
+    SetRegisterNull(res);
+    // NULL
+    return 1;
+  }
+
   if (res_type == kTypeBigInt) {
     int64_t val0 = a.value.val_int64;
     int64_t val1 = b.value.val_int64;
@@ -222,6 +245,12 @@ int32_t RegMulReg(const Register& a, const Register& b, Register* res) {
   } else {
     assert(a.type == kTypeBigInt && b.type == kTypeBigInt);
     res_type = kTypeBigInt;
+  }
+
+  if (a.is_null || b.is_null) {
+    SetRegisterNull(res);
+    // NULL
+    return 1;
   }
 
   if (res_type == kTypeBigInt) {
@@ -369,6 +398,12 @@ int32_t RegDivReg(const Register& a, const Register& b, Register* res) {
     res_type = kTypeBigInt;
   }
 
+  if (a.is_null || b.is_null) {
+    SetRegisterNull(res);
+    // NULL
+    return 1;
+  }
+
   if (res_type == kTypeBigInt) {
     int64_t val0 = a.value.val_int64;
     int64_t val1 = b.value.val_int64;
@@ -383,7 +418,7 @@ int32_t RegDivReg(const Register& a, const Register& b, Register* res) {
     if (val1 == 0) {
       // Divide by zero
       if (res_unsigned) {
-        res->value.val_uint64 = 0;
+        SetRegisterNull(res);
       } else {
         res->value.val_int64 = 0;
       }
@@ -432,7 +467,7 @@ int32_t RegDivReg(const Register& a, const Register& b, Register* res) {
                        static_cast<double>(b.value.val_int64));
     if (val1 == 0) {
       // Divided by zero
-      res->value.val_double = 0.0;
+      SetRegisterNull(res);
     } else {
       double res_val = val0 / val1;
       if (std::isfinite(res_val)) {
@@ -444,6 +479,9 @@ int32_t RegDivReg(const Register& a, const Register& b, Register* res) {
     }
   }
   res->type = res_type;
+  if (res->is_null) {
+    return 1;
+  }
   return 0;
 }
 
@@ -454,6 +492,12 @@ int32_t RegModReg(const Register& a, const Register& b, Register* res) {
   } else {
     assert(a.type == kTypeBigInt && b.type == kTypeBigInt);
     res_type = kTypeBigInt;
+  }
+
+  if (a.is_null || b.is_null) {
+    SetRegisterNull(res);
+    // NULL
+    return 1;
   }
 
   if (res_type == kTypeBigInt) {
@@ -512,17 +556,20 @@ int32_t RegModReg(const Register& a, const Register& b, Register* res) {
                        static_cast<double>(b.value.val_int64));
     if (val1 == 0) {
       // Divided by zero
-      res->value.val_double = 0.0;
+      SetRegisterNull(res);
     } else {
       res->value.val_double = std::fmod(val0, val1);
     }
   }
   res->type = res_type;
+  if (res->is_null) {
+    return 1;
+  }
   return 0;
 }
 
 int32_t Min(const Register& a, AggResItem* res) {
-  assert(res != nullptr && a.type == res->type);
+  assert(res != nullptr && (a.is_null || a.type == res->type));
   // assert(res != nullptr && a.is_unsigned == res->is_unsigned);
   DataType res_type = kTypeUnknown;
   if (a.type == kTypeDouble) {
@@ -530,6 +577,11 @@ int32_t Min(const Register& a, AggResItem* res) {
   } else {
     assert(a.type == kTypeBigInt);
     res_type = kTypeBigInt;
+  }
+
+  if (a.is_null) {
+    // NULL
+    return 1;
   }
 
   if (res_type == kTypeBigInt) {
@@ -585,7 +637,7 @@ int32_t Min(const Register& a, AggResItem* res) {
 }
 
 int32_t Max(const Register& a, AggResItem* res) {
-  assert(res != nullptr && a.type == res->type);
+  assert(res != nullptr && (a.is_null || a.type == res->type));
   // assert(res != nullptr && a.is_unsigned == res->is_unsigned);
   DataType res_type = kTypeUnknown;
   if (a.type == kTypeDouble) {
@@ -593,6 +645,11 @@ int32_t Max(const Register& a, AggResItem* res) {
   } else {
     assert(a.type == kTypeBigInt);
     res_type = kTypeBigInt;
+  }
+
+  if (a.is_null) {
+    // NULL
+    return 1;
   }
 
   if (res_type == kTypeBigInt) {
@@ -645,19 +702,114 @@ int32_t Max(const Register& a, AggResItem* res) {
   return 0;
 }
 
-int32_t RegIncrToAggResItem(const Register& a, AggResItem* res) {
-  assert(res != nullptr && a.type == res->type);
+int32_t Count(const Register& a, AggResItem* res) {
+  assert(res != nullptr);
 
-  switch (res->type) {
-    case kTypeBigInt:
-      res->value.val_int64 = a.value.val_int64 + res->value.val_int64;
-      break;
-    case kTypeDouble:
-      res->value.val_double = a.value.val_double + res->value.val_double;
-      break;
-    default:
-      assert(0);
+  if (a.is_null) {
+    // NULL
+    return 1;
+  } else {
+    res->value.val_uint64 += 1;
+    res->is_unsigned = true;
   }
+
+  return 0;
+}
+
+int32_t Sum(const Register& a, AggResItem* res) {
+  DataType res_type = kTypeUnknown;
+  if (a.type == kTypeDouble || res->type == kTypeDouble) {
+    res_type = kTypeDouble;
+  } else {
+    assert(a.type == kTypeBigInt && res->type == kTypeBigInt);
+    res_type = kTypeBigInt;
+  }
+
+  if (a.is_null) {
+    // NULL
+    return 1;
+  }
+
+  if (res_type == kTypeBigInt) {
+    int64_t val0 = a.value.val_int64;
+    int64_t val1 = res->value.val_int64;
+    int64_t res_val = static_cast<uint64_t>(val0) + static_cast<uint64_t>(val1);
+    bool res_unsigned = false;
+
+    if (a.is_unsigned) {
+      if (res->is_unsigned || val1 >= 0) {
+        if (TestIfSumOverflowsUint64((uint64_t)val0, (uint64_t)val1)) {
+          // overflows;
+          return -1;
+        } else {
+          res_unsigned = true;
+        }
+      } else {
+        if ((uint64_t)val0 > (uint64_t)(LLONG_MAX)) {
+          res_unsigned = true;
+        }
+      }
+    } else {
+      if (res->is_unsigned) {
+        if (val0 >= 0) {
+          if (TestIfSumOverflowsUint64((uint64_t)val0, (uint64_t)val1)) {
+            // overflows;
+            return -1;
+          } else {
+            res_unsigned = true;
+          }
+        } else {
+          if ((uint64_t)val1 > (uint64_t)(LLONG_MAX)) {
+            res_unsigned = true;
+          }
+        }
+      } else {
+        if (val0 >= 0 && val1 >= 0) {
+          res_unsigned = true;
+        } else if (val0 < 0 && val1 < 0 && res_val >= 0) {
+          // overflow
+          return -1;
+        }
+      }
+    }
+
+    // Check if res_val is overflow
+    bool unsigned_flag = (a.is_unsigned != res->is_unsigned);
+    if ((unsigned_flag && !res_unsigned && res_val < 0) ||
+        (!unsigned_flag && res_unsigned &&
+         (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
+      return -1;
+    } else {
+      if (unsigned_flag) {
+        res->value.val_uint64 = res_val;
+      } else {
+        res->value.val_int64 = res_val;
+      }
+    }
+    res->is_unsigned = unsigned_flag;
+  } else {
+    double val0 = (a.type == kTypeDouble) ?
+                     a.value.val_double :
+                     ((a.is_unsigned == true) ?
+                       static_cast<double>(a.value.val_uint64) :
+                       static_cast<double>(a.value.val_int64));
+    double val1 = (res->type == kTypeDouble) ?
+                     res->value.val_double :
+                     ((res->is_unsigned == true) ?
+                       static_cast<double>(res->value.val_uint64) :
+                       static_cast<double>(res->value.val_int64));
+    double res_val = val0 + val1;
+    if (std::isfinite(res_val)) {
+      res->value.val_double = res_val;
+    } else {
+      // overflow
+      return -1;
+    }
+    res->is_unsigned = false;
+  }
+
+  res->type = res_type;
+
   return 0;
 }
 
@@ -812,7 +964,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegPlusReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
-        assert(ret == 0);
+        assert(ret >= 0);
         break;
 
       case kOpMinus:
@@ -831,7 +983,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegMinusReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
-        assert(ret == 0);
+        assert(ret >= 0);
         break;
 
       case kOpMul:
@@ -850,7 +1002,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegMulReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
-        assert(ret == 0);
+        assert(ret >= 0);
         break;
 
       case kOpDiv:
@@ -869,7 +1021,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegDivReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
-        assert(ret == 0);
+        assert(ret >= 0);
         break;
 
       case kOpMod:
@@ -888,7 +1040,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegModReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
-        assert(ret == 0);
+        assert(ret >= 0);
 
         break;
 
@@ -902,8 +1054,11 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         assert(type == CeilType(col->type()) &&
             col->raw_length() == sizeof(Register::value));
 
+        ResetRegister(&registers_[reg_index]);
         registers_[reg_index].type = type;
         registers_[reg_index].is_unsigned = is_unsigned;
+        // TODO(zhao song): registers_[reg_index].is_null = col->is_null();
+        registers_[reg_index].is_null = false;
         switch (type) {
           case kTypeBigInt:
             registers_[reg_index].value.val_int64 = longlongget(col->data());
@@ -918,11 +1073,12 @@ bool AggInterpreter::ProcessRec(Record* rec) {
       case kOpCount:
         raw_type = (value & 0x03E00000) >> 21;
         is_unsigned = DecodeRawType(raw_type, &type);
+        reg_index = (value & 0x000F0000) >> 16;
         agg_index = (value & 0x0000FFFF);
-        assert(type == agg_results_[agg_index].type);
-        ret = RegIncrToAggResItem(Register{kTypeBigInt, 1},
-                      &agg_res_ptr[agg_index]);
-        assert(ret == 0);
+        assert(agg_results_[agg_index].type == kTypeUnknown ||
+               agg_results_[agg_index].type == kTypeBigInt);
+        ret = Count(registers_[reg_index], &agg_res_ptr[agg_index]);
+        assert(ret >= 0);
         break;
 
        case kOpSum:
@@ -932,10 +1088,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         agg_index = (value & 0x0000FFFF);
         assert(type == agg_results_[agg_index].type);
 
-        ret = RegIncrToAggResItem(registers_[reg_index],
-                      &agg_res_ptr[agg_index]);
+        ret = Sum(registers_[reg_index], &agg_res_ptr[agg_index]);
 
-        assert(ret == 0);
+        assert(ret >= 0);
         break;
 
        case kOpMax:
@@ -947,7 +1102,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = Max(registers_[reg_index], &agg_res_ptr[agg_index]);
 
-        assert(ret == 0);
+        assert(ret >= 0);
         break;
 
        case kOpMin:
@@ -959,7 +1114,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = Min(registers_[reg_index], &agg_res_ptr[agg_index]);
 
-        assert(ret == 0);
+        assert(ret >= 0);
         break;
 
       default:
@@ -989,7 +1144,7 @@ void AggInterpreter::Print() {
               break;
 
             case kTypeDouble:
-              printf("    (kTypeDouble: %lf)\n", item[i].value.val_double);
+              printf("    (kTypeDouble: %.16f)\n", item[i].value.val_double);
               break;
             default:
               assert(0);
@@ -1008,7 +1163,7 @@ void AggInterpreter::Print() {
           break;
 
         case kTypeDouble:
-          printf("    (kTypeDouble: %lf)\n", item[i].value.val_double);
+          printf("    (kTypeDouble: %.16f)\n", item[i].value.val_double);
           break;
         default:
           assert(0);

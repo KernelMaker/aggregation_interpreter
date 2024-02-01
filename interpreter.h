@@ -71,6 +71,7 @@ struct Register {
   DataType type;
   DataValue value;
   bool is_unsigned;
+  bool is_null;
 };
 
 struct AggResItem {
