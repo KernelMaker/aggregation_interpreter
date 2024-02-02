@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <fstream>
 
 #include "interpreter.h"
 
@@ -17,29 +18,31 @@
 /*
  * Aggregation
  *
- * select count(a), sum(a/b+c*d), max((a+b)*c/d), min(b%c-d), sum(a+c), count(d/c) from t group by a;
+ * select count(a), sum(a/b+c*d), max((a+b)*c/d), min(b%c-d), sum(a+c), count(d/c), sum(a/b), sum(c*d) from t group by e;
  */
 
 const char* g_chars = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 
-const uint32_t g_prog_len = 41;
-const uint32_t ins_pos = 9;
+const uint32_t g_prog_len = 50;
+const uint32_t ins_pos = 10;
 uint32_t program[g_prog_len];
 
 int main() {
 
   memset(program, 0, sizeof(program));
   program[0] = ((uint16_t)0x0721) << 16 | (uint16_t)g_prog_len;
-  program[1] = ((uint16_t)1) << 16 | // num of cols used in group by
-               ((uint16_t)6); // num of aggregation results
+  program[1] = ((uint16_t)0) << 16 | // num of cols used in group by
+               ((uint16_t)8); // num of aggregation results
 
-  program[2] = 0; // group by column 0
-  program[3] = kTypeBigInt; // The 1st aggregation type BIGINT
-  program[4] = kTypeDouble; // The 3rd aggregation type DOUBLE
-  program[5] = kTypeDouble; // The 4th aggregation type BIGINT
-  program[6] = kTypeDouble; // The 5th aggregation type DOUBLE
-  program[7] = kTypeBigInt; // The 6th aggregation type DOUBLE
-  program[8] = kTypeBigInt; // The 2nd aggregation type BIGINT
+  // program[2] = 4; // group by column 0
+  program[2] = kTypeBigInt; // The 1st aggregation type BIGINT
+  program[3] = kTypeDouble; // The 3rd aggregation type DOUBLE
+  program[4] = kTypeDouble; // The 4th aggregation type BIGINT
+  program[5] = kTypeDouble; // The 5th aggregation type DOUBLE
+  program[6] = kTypeBigInt; // The 6th aggregation type DOUBLE
+  program[7] = kTypeBigInt; // The 7th aggregation type BIGINT
+  program[8] = kTypeDouble; // The 8th aggregation type DOUBLE
+  program[9] = kTypeDouble; // The 9th aggregation type DOUBLE
 
   program[ins_pos] =
                ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
@@ -231,26 +234,93 @@ int main() {
                ((uint8_t)kOpCount) << 26 |                              // COUNT
                1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |            // kTypeBigInt
                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
-               (uint16_t)5;                                             // agg_result 0
+               (uint16_t)5;                                             // agg_result 5
+                                                                        //
+  program[ins_pos + 32] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // kTypeBigInt
+               ((uint8_t)kReg1 & 0x0F) << 16 |                           // Register 1
+               (uint16_t)0;                                              // Column 0
 
+  program[ins_pos + 33] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
+               (uint16_t)1;                                              // Column 1
+
+  program[ins_pos + 34] =
+                ((uint8_t)kOpDiv) << 26 |                                    // DIV
+                0 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // kTypeBigInt (Reg 1)
+                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 2)
+                ((uint8_t)kReg1 & 0x0F) << 12 | ((uint8_t)kReg2 & 0xF) << 8; // Register 1, Register 2
+
+  program[ins_pos + 35] =
+                ((uint8_t)kOpSum) << 26 |                                // SUM
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 1)
+                ((uint8_t)kReg1 & 0x0F) << 16 |                          // Register 1
+                (uint16_t)6;                                             // agg_result 6
+
+  program[ins_pos + 36] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |             // unsigned kTypeBigInt
+               ((uint8_t)kReg2 & 0x0F) << 16 |                           // Register 2
+               (uint16_t)2;                                              // Column 2
+
+  program[ins_pos + 37] =
+               ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL
+               0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |             // kTypeDouble
+               ((uint8_t)kReg3 & 0x0F) << 16 |                           // Register 3
+               (uint16_t)3;                                              // Column 3
+
+  program[ins_pos + 38] =
+                ((uint8_t)kOpMul) << 26 |                                    // MUL
+                1 << 25 | (uint8_t)(kTypeBigInt << 4) << 17 |                // unsigned kTypeBigInt (Reg 2)
+                0 << 20 | (uint8_t)(kTypeDouble << 4) << 12 |                // kTypeDouble (Reg 3)
+                ((uint8_t)kReg2 & 0x0F) << 12 | ((uint8_t)kReg3 & 0xF) << 8; // Register 2, Register 3
+                                                                             //
+  program[ins_pos + 39] =
+                ((uint8_t)kOpSum) << 26 |                                // SUM
+                0 << 25 | (uint8_t)(kTypeDouble << 4) << 17 |            // kTypeDouble (Reg 2)
+                ((uint8_t)kReg2 & 0x0F) << 16 |                          // Register 2
+                (uint16_t)7;                                             // agg_result 7
 
   AggInterpreter agg(program, g_prog_len);
   agg.Init();
-  Record rec1(1, 1.11, 10, 10.1010, g_chars + (rand() % 40), 12);
-  rec1.Print();
-  agg.ProcessRec(&rec1);
-  Record rec2(1, 1.12, 2, 0.11, g_chars + (rand() % 40), 12);
-  rec2.Print();
-  agg.ProcessRec(&rec2);
-  Record rec3(2, 2.22, 1, 1.0, g_chars + (rand() % 40), 12);
-  rec3.Print();
-  agg.ProcessRec(&rec3);
-  Record rec4(2, -4.22, 3, 0.0, g_chars + (rand() % 40), 12);
-  rec4.Print();
-  agg.ProcessRec(&rec4);
-  Record rec5(2, -5.111, 0, -5.6, g_chars + (rand() % 40), 12);
-  rec5.Print();
-  agg.ProcessRec(&rec5);
+
+  char buf[256];
+  std::fstream fs;
+  fs.open("data.txt", std::fstream::in);
+  while (!fs.eof()) {
+    fs.getline(buf, 256);
+    std::string str(buf);
+    if (str.length() == 0) {
+      break;
+    }
+    size_t start = 0;
+    size_t pos = str.find(',', start);
+    std::string str1 = str.substr(start, pos - start);
+    start = pos + 1;
+    pos = str.find(',', start);
+    std::string str2 = str.substr(start, pos - start);
+    start = pos + 1;
+    pos = str.find(',', start);
+    std::string str3 = str.substr(start, pos - start);
+    start = pos + 1;
+    pos = str.find(',', start);
+    std::string str4 = str.substr(start, pos - start);
+    start = pos + 1;
+    pos = str.find(',', start);
+    std::string str5 = str.substr(start);
+    start = pos + 1;
+    int64_t v1 = std::stoll(str1);
+    double v2 = std::stod(str2);
+    uint64_t v3 = std::stoull(str3);
+    double v4 = std::stod(str4);
+    int64_t v5 = std::stoll(str5);
+    Record rec(v1, v2, v3, v4, v5, "aaaaaaaaaa\0", 12);
+    // rec.Print();
+    agg.ProcessRec(&rec);
+  }
 
   agg.Print();
 

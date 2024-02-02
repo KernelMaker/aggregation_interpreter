@@ -81,6 +81,11 @@ struct AggResItem {
   bool inited;  // used by Min/Max
 };
 
+struct GBColInfo {
+  ColumnType type;
+  bool is_unsigned;
+};
+
 class AggInterpreter {
  public:
   AggInterpreter(const uint32_t* prog, uint32_t prog_len):
@@ -88,7 +93,8 @@ class AggInterpreter {
     inited_(false), n_gb_cols_(0), gb_cols_(nullptr),
     n_agg_results_(0),
     agg_results_(nullptr), agg_prog_start_pos_(0),
-    gb_map_(nullptr), n_groups_(0) {
+    gb_map_(nullptr), n_groups_(0),
+    gb_cols_type_inited_(false), gb_cols_info_(nullptr) {
   }
   ~AggInterpreter() {
     delete[] gb_cols_;
@@ -98,6 +104,7 @@ class AggInterpreter {
         delete[] iter->first.ptr;
       }
       delete gb_map_;
+      delete[] gb_cols_info_;
     }
   }
 
@@ -121,5 +128,7 @@ class AggInterpreter {
 
   std::map<Entry, Entry, EntryCmp>* gb_map_;
   uint32_t n_groups_;
+  bool gb_cols_type_inited_;
+  GBColInfo* gb_cols_info_;
 };
 #endif  // INTERPRETER_H_

@@ -100,7 +100,13 @@ int32_t RegPlusReg(const Register& a, const Register& b, Register* res) {
     }
 
     // Check if res_val is overflow
-    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    bool unsigned_flag = false;
+    if (res_type == kTypeBigInt) {
+      unsigned_flag = (a.is_unsigned | b.is_unsigned);
+    } else {
+      assert(res_type == kTypeDouble);
+      unsigned_flag = (a.is_unsigned & b.is_unsigned);
+    }
     if ((unsigned_flag && !res_unsigned && res_val < 0) ||
         (!unsigned_flag && res_unsigned &&
          (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
@@ -201,7 +207,13 @@ int32_t RegMinusReg(const Register& a, const Register& b, Register* res) {
       }
     }
     // Check if res_val is overflow
-    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    bool unsigned_flag = false;
+    if (res_type == kTypeBigInt) {
+      unsigned_flag = (a.is_unsigned | b.is_unsigned);
+    } else {
+      assert(res_type == kTypeDouble);
+      unsigned_flag = (a.is_unsigned & b.is_unsigned);
+    }
     if ((unsigned_flag && !res_unsigned && res_val < 0) ||
         (!unsigned_flag && res_unsigned &&
          (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
@@ -272,7 +284,13 @@ int32_t RegMulReg(const Register& a, const Register& b, Register* res) {
     if (a_negative && val0 == INT_MIN64) {
       if (val1 == 1) {
         // Check if val0 is overflow
-        bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+        bool unsigned_flag = false;
+        if (res_type == kTypeBigInt) {
+          unsigned_flag = (a.is_unsigned | b.is_unsigned);
+        } else {
+          assert(res_type == kTypeDouble);
+          unsigned_flag = (a.is_unsigned & b.is_unsigned);
+        }
         if ((unsigned_flag && !res_unsigned && val0 < 0) ||
             (!unsigned_flag && res_unsigned &&
              (uint64_t)val0 > (uint64_t)LLONG_MAX)) {
@@ -292,7 +310,13 @@ int32_t RegMulReg(const Register& a, const Register& b, Register* res) {
     if (b_negative && val1 == INT_MIN64) {
       if (val0 == 1) {
         // Check if val1 is overflow
-        bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+        bool unsigned_flag = false;
+        if (res_type == kTypeBigInt) {
+          unsigned_flag = (a.is_unsigned | b.is_unsigned);
+        } else {
+          assert(res_type == kTypeDouble);
+          unsigned_flag = (a.is_unsigned & b.is_unsigned);
+        }
         if ((unsigned_flag && !res_unsigned && val1 < 0) ||
             (!unsigned_flag && res_unsigned &&
              (uint64_t)val1 > (uint64_t)LLONG_MAX)) {
@@ -352,7 +376,13 @@ int32_t RegMulReg(const Register& a, const Register& b, Register* res) {
     }
 
     // Check if res_val is overflow
-    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    bool unsigned_flag = false;
+    if (res_type == kTypeBigInt) {
+      unsigned_flag = (a.is_unsigned | b.is_unsigned);
+    } else {
+      assert(res_type == kTypeDouble);
+      unsigned_flag = (a.is_unsigned & b.is_unsigned);
+    }
     if ((unsigned_flag && !res_unsigned && res_val < 0) ||
         (!unsigned_flag && res_unsigned &&
          (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
@@ -440,7 +470,13 @@ int32_t RegDivReg(const Register& a, const Register& b, Register* res) {
       }
     }
     // Check if res_val is overflow
-    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    bool unsigned_flag = false;
+    if (res_type == kTypeBigInt) {
+      unsigned_flag = (a.is_unsigned | b.is_unsigned);
+    } else {
+      assert(res_type == kTypeDouble);
+      unsigned_flag = (a.is_unsigned & b.is_unsigned);
+    }
     if ((unsigned_flag && !res_unsigned && res_val < 0) ||
         (!unsigned_flag && res_unsigned &&
          (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
@@ -529,7 +565,13 @@ int32_t RegModReg(const Register& a, const Register& b, Register* res) {
     res_val = res_unsigned ? res_val : -res_val;
 
     // Check if res_val is overflow
-    bool unsigned_flag = (a.is_unsigned != b.is_unsigned);
+    bool unsigned_flag = false;
+    if (res_type == kTypeBigInt) {
+      unsigned_flag = (a.is_unsigned | b.is_unsigned);
+    } else {
+      assert(res_type == kTypeDouble);
+      unsigned_flag = (a.is_unsigned & b.is_unsigned);
+    }
     if ((unsigned_flag && !res_unsigned && res_val < 0) ||
         (!unsigned_flag && res_unsigned &&
          (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
@@ -774,7 +816,13 @@ int32_t Sum(const Register& a, AggResItem* res) {
     }
 
     // Check if res_val is overflow
-    bool unsigned_flag = (a.is_unsigned != res->is_unsigned);
+    bool unsigned_flag = false;
+    if (res_type == kTypeBigInt) {
+      unsigned_flag = (a.is_unsigned | res->is_unsigned);
+    } else {
+      assert(res_type == kTypeDouble);
+      unsigned_flag = (a.is_unsigned & res->is_unsigned);
+    }
     if ((unsigned_flag && !res_unsigned && res_val < 0) ||
         (!unsigned_flag && res_unsigned &&
          (uint64_t)res_val > (uint64_t)LLONG_MAX)) {
@@ -839,6 +887,7 @@ bool AggInterpreter::Init() {
    */
   if (n_gb_cols_) {
     gb_cols_ = new uint32_t[n_gb_cols_];
+    gb_cols_info_ = new GBColInfo[n_gb_cols_];
 
     uint32_t i = 0;
     while (i < n_gb_cols_ && cur_pos_ < prog_len_) {
@@ -894,7 +943,7 @@ bool AggInterpreter::ProcessRec(Record* rec) {
   if (n_gb_cols_) {
     uint32_t agg_rec_len = 0;
     for (uint32_t i = 0; i < n_gb_cols_; i++) {
-      Column* col = rec->GetColumn(i);
+      Column* col = rec->GetColumn(gb_cols_[i]);
       agg_rec_len += col->encoded_length();
     }
     agg_rec_len += (n_agg_results_ * sizeof(AggResItem));
@@ -903,10 +952,14 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
     uint32_t pos = 0;
     for (uint32_t i = 0; i < n_gb_cols_; i++) {
-      Column* col = rec->GetColumn(i);
+      Column* col = rec->GetColumn(gb_cols_[i]);
       memcpy(agg_rec + pos, col->buf(), col->encoded_length());
       pos += col->encoded_length();
+      if (!gb_cols_type_inited_) {
+        gb_cols_info_[i] = {col->type(), col->is_unsigned()};
+      }
     }
+    gb_cols_type_inited_ = true;
     Entry entry{agg_rec, pos};
     auto iter = gb_map_->find(entry);
     if (iter != gb_map_->end()) {
@@ -964,6 +1017,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegPlusReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
+        if (ret < 0) {
+          printf("Overflow, value is out of range\n");
+        }
         assert(ret >= 0);
         break;
 
@@ -983,6 +1039,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegMinusReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
+        if (ret < 0) {
+          printf("Overflow, value is out of range\n");
+        }
         assert(ret >= 0);
         break;
 
@@ -1002,6 +1061,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegMulReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
+        if (ret < 0) {
+          printf("Overflow, value is out of range\n");
+        }
         assert(ret >= 0);
         break;
 
@@ -1021,6 +1083,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegDivReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
+        if (ret < 0) {
+          printf("Overflow, value is out of range\n");
+        }
         assert(ret >= 0);
         break;
 
@@ -1040,6 +1105,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = RegModReg(registers_[reg_index], registers_[reg_index2],
                               &registers_[reg_index]);
+        if (ret < 0) {
+          printf("Overflow, value is out of range\n");
+        }
         assert(ret >= 0);
 
         break;
@@ -1078,6 +1146,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
         assert(agg_results_[agg_index].type == kTypeUnknown ||
                agg_results_[agg_index].type == kTypeBigInt);
         ret = Count(registers_[reg_index], &agg_res_ptr[agg_index]);
+        if (ret < 0) {
+          printf("Overflow, value is out of range\n");
+        }
         assert(ret >= 0);
         break;
 
@@ -1090,6 +1161,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = Sum(registers_[reg_index], &agg_res_ptr[agg_index]);
 
+        if (ret < 0) {
+          printf("Overflow, value is out of range\n");
+        }
         assert(ret >= 0);
         break;
 
@@ -1102,6 +1176,9 @@ bool AggInterpreter::ProcessRec(Record* rec) {
 
         ret = Max(registers_[reg_index], &agg_res_ptr[agg_index]);
 
+        if (ret < 0) {
+          printf("Overflow, value is out of range\n");
+        }
         assert(ret >= 0);
         break;
 
@@ -1129,47 +1206,91 @@ void AggInterpreter::Print() {
     if (gb_map_) {
       printf("Group by columns: [");
       for (int i = 0; i < n_gb_cols_; i++) {
-        printf("%u ", gb_cols_[i]);
+        if (i != n_gb_cols_ - 1) {
+          printf("%u ", gb_cols_[i]);
+        } else {
+          printf("%u", gb_cols_[i]);
+        }
       }
       printf("]\n");
+      printf("Num of groups: %lu\n", gb_map_->size());
+      printf("Aggregation results:\n");
 
       for (auto iter = gb_map_->begin(); iter != gb_map_->end(); iter++) {
-        printf("Group [%p, %u], Aggregation result: [\n",
-            reinterpret_cast<void*>(iter->first.ptr), iter->first.len);
+        int pos = 0;
+        printf("(");
+        for (int i = 0; i < n_gb_cols_; i++) {
+          if (gb_cols_info_[i].type == kTypeBigInt) {
+            if (gb_cols_info_[i].is_unsigned) {
+              if (i != n_gb_cols_ - 1) {
+                printf("%15lu, ", *(uint64_t*)(iter->first.ptr + pos));
+              } else {
+                printf("%15lu): ", *(uint64_t*)(iter->first.ptr + pos));
+              }
+            } else {
+              if (i != n_gb_cols_ - 1) {
+                printf("%15ld, ", *(int64_t*)(iter->first.ptr + pos));
+              } else {
+                printf("%15ld): ", *(int64_t*)(iter->first.ptr + pos));
+              }
+            }
+            pos += sizeof(int64_t);
+          } else if (gb_cols_info_[i].type == kTypeDouble) {
+            if (i != n_gb_cols_ - 1) {
+              printf("%.16f, ", *(double*)(iter->first.ptr + pos));
+            } else {
+              printf("%.16f): ", *(double*)(iter->first.ptr + pos));
+            }
+            pos += sizeof(double);
+          } else {
+            assert(gb_cols_info_[i].type == kTypeVarchar);
+            uint32_t len = *(uint32_t*)(iter->first.ptr + pos);
+            pos += sizeof(uint32_t);
+            if (i != n_gb_cols_ - 1) {
+              printf("%15s, ", (iter->first.ptr + pos));
+            } else {
+              printf("%15s): ", (iter->first.ptr + pos));
+            }
+          }
+        }
+
         AggResItem* item = reinterpret_cast<AggResItem*>(iter->second.ptr);
         for (int i = 0; i < n_agg_results_; i++) {
           switch (item[i].type) {
             case kTypeBigInt:
-              printf("    (kTypeBigInt: %ld)\n", item[i].value.val_int64);
+              // printf("    (kTypeBigInt: %ld)\n", item[i].value.val_int64);
+              printf("[%15ld]", item[i].value.val_int64);
               break;
 
             case kTypeDouble:
-              printf("    (kTypeDouble: %.16f)\n", item[i].value.val_double);
+              // printf("    (kTypeDouble: %.16f)\n", item[i].value.val_double);
+              printf("[%31.16f]", item[i].value.val_double);
               break;
             default:
               assert(0);
           }
         }
-        printf("]\n");
+        printf("\n");
       }
     }
   } else {
-    printf("Aggregation result: [\n");
     AggResItem* item = agg_results_;
     for (int i = 0; i < n_agg_results_; i++) {
       switch (item[i].type) {
         case kTypeBigInt:
-          printf("    (kTypeBigInt: %ld)\n", item[i].value.val_int64);
+          // printf("    (kTypeBigInt: %ld)\n", item[i].value.val_int64);
+          printf("[%15ld]", item[i].value.val_int64);
           break;
 
         case kTypeDouble:
-          printf("    (kTypeDouble: %.16f)\n", item[i].value.val_double);
+          // printf("    (kTypeDouble: %.16f)\n", item[i].value.val_double);
+          printf("[%31.16f]", item[i].value.val_double);
           break;
         default:
           assert(0);
       }
     }
-    printf("]\n");
+    printf("\n");
   }
 }
 
