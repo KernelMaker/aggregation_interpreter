@@ -23,26 +23,26 @@
 
 const char* g_chars = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 
-const uint32_t g_prog_len = 50;
-const uint32_t ins_pos = 10;
+const uint32_t g_prog_len = 51;
+const uint32_t ins_pos = 11;
 uint32_t program[g_prog_len];
 
 int main() {
 
   memset(program, 0, sizeof(program));
   program[0] = ((uint16_t)0x0721) << 16 | (uint16_t)g_prog_len;
-  program[1] = ((uint16_t)0) << 16 | // num of cols used in group by
+  program[1] = ((uint16_t)1) << 16 | // num of cols used in group by
                ((uint16_t)8); // num of aggregation results
 
-  // program[2] = 4; // group by column 0
-  program[2] = kTypeBigInt; // The 1st aggregation type BIGINT
-  program[3] = kTypeDouble; // The 3rd aggregation type DOUBLE
-  program[4] = kTypeDouble; // The 4th aggregation type BIGINT
-  program[5] = kTypeDouble; // The 5th aggregation type DOUBLE
-  program[6] = kTypeBigInt; // The 6th aggregation type DOUBLE
-  program[7] = kTypeBigInt; // The 7th aggregation type BIGINT
-  program[8] = kTypeDouble; // The 8th aggregation type DOUBLE
-  program[9] = kTypeDouble; // The 9th aggregation type DOUBLE
+  program[2] = 4; // group by column 0
+  program[3] = kTypeBigInt; // The 1st aggregation type BIGINT
+  program[4] = kTypeDouble; // The 3rd aggregation type DOUBLE
+  program[5] = kTypeDouble; // The 4th aggregation type BIGINT
+  program[6] = kTypeDouble; // The 5th aggregation type DOUBLE
+  program[7] = kTypeBigInt; // The 6th aggregation type DOUBLE
+  program[8] = kTypeBigInt; // The 7th aggregation type BIGINT
+  program[9] = kTypeDouble; // The 8th aggregation type DOUBLE
+  program[10] = kTypeDouble; // The 9th aggregation type DOUBLE
 
   program[ins_pos] =
                ((uint8_t)kOpLoadCol) << 26 |                             // LOADCOL

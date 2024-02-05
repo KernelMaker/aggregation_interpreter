@@ -20,7 +20,7 @@ int main() {
   double v4;
   int64_t v5;
 
-	for (int i = 0; i < 100000; i++) {
+	for (int i = 0; i < 1000000; i++) {
     v1 = distr_int64(gen);
     if (distr_zero(gen) == 6) {
       v2 = 0.0;
